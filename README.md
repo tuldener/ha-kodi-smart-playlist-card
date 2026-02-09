@@ -7,6 +7,7 @@ Eine Lovelace-Kachel, die eine oder mehrere Kodi Smart Playlists (`.xsp`) per JS
 - Einzelne Playlist (`playlist`) oder mehrere Playlists (`playlists`) in einer Card
 - Nutzt Home Assistant Service `kodi.call_method`
 - Frei konfigurierbarer Name, Icon und JSON-RPC Methode
+- Visueller Lovelace-Editor (GUI) zum Bearbeiten der Card-Konfiguration
 
 ## Installation
 
