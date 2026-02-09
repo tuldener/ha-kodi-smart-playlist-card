@@ -8,7 +8,7 @@ Eine Lovelace-Kachel, die eine oder mehrere Kodi Smart Playlists (`.xsp`) per JS
 - Nutzt Home Assistant Service `kodi.call_method`
 - Standardaufruf per `Player.Open` mit Playlist als `item.partymode`
 - Frei konfigurierbarer Name, Icon, JSON-RPC Methode und `window`
-- `open_mode` pro Playlist waehlt zwischen `partymode` und `file`
+- `open_mode` pro Playlist waehlt zwischen `partymode`, `file` und `xbmc_builtin_party`
 - Visueller Lovelace-Editor (GUI) zum Bearbeiten der Card-Konfiguration
 - `window`-Auswahl im Editor als Dropdown (`videolibrary`, `musiclibrary`, `videos`)
 - Optionaler Debug-Modus mit Rueckmeldungsfeld in der Kachel (letzte 5 Aufrufe)
@@ -65,6 +65,10 @@ playlists:
 - `window` wird nur fuer `GUI.ActivateWindow` benoetigt.
 - `open_mode: partymode` zeigt oft nur eine kleine, dynamische Queue.
 - `open_mode: file` laedt die komplette Smart Playlist.
+- `open_mode: xbmc_builtin_party` fuehrt `XBMC.ExecuteBuiltin` aus:
+  - `PlayMedia(<playlist>)`
+  - `PlayerControl(RepeatAll)`
+  - `PlayerControl(RandomOn)`
 
 ## Entspricht folgendem JSON-RPC Muster
 

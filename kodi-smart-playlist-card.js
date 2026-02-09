@@ -296,6 +296,31 @@ class KodiSmartPlaylistCard extends HTMLElement {
         serviceData.parameters = [entry.playlist];
       } else if (method === "Player.Open") {
         const openMode = entry.open_mode || config.open_mode || "partymode";
+        if (openMode === "xbmc_builtin_party") {
+          const commands = [
+            "PlayMedia(" + entry.playlist + ")",
+            "PlayerControl(RepeatAll)",
+            "PlayerControl(RandomOn)",
+          ];
+          const responses = [];
+          for (let i = 0; i < commands.length; i += 1) {
+            const builtInServiceData = {
+              entity_id: config.entity,
+              method: "XBMC.ExecuteBuiltin",
+              command: commands[i],
+            };
+            const stepResponse = await this._hass.callService("kodi", "call_method", builtInServiceData);
+            responses.push({ command: commands[i], response: stepResponse });
+          }
+          if (config.debug) {
+            this._pushDebug(
+              this._formatDebug("success", { mode: "xbmc_builtin_party", commands: commands }, responses)
+            );
+          }
+          this._showToast("Playlist gestartet (XBMC Builtin): " + entry.name);
+          this._render();
+          return;
+        }
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       } else {
         const openMode = entry.open_mode || config.open_mode || "partymode";
@@ -795,13 +820,18 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
   }
 
   _getOpenModeOptions(selectedMode) {
-    const modes = ["partymode", "file"];
+    const modes = ["partymode", "file", "xbmc_builtin_party"];
     const options = modes.indexOf(selectedMode) === -1 ? [selectedMode].concat(modes) : modes;
     return options
       .map(
         function (mode) {
           const selected = mode === selectedMode ? "selected" : "";
-          const label = mode === "file" ? "file (komplette Playlist)" : "partymode (dynamisch)";
+          const label =
+            mode === "file"
+              ? "file (komplette Playlist)"
+              : mode === "xbmc_builtin_party"
+                ? "xbmc_builtin_party (PlayMedia + Repeat + Random)"
+                : "partymode (dynamisch)";
           return `<option value="${this._escapeAttr(mode)}" ${selected}>${this._escape(label)}</option>`;
         }.bind(this)
       )
