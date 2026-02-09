@@ -10,7 +10,7 @@ Eine Lovelace-Kachel, die eine oder mehrere Kodi Smart Playlists (`.xsp`) per JS
 - Frei konfigurierbarer Name, Icon, JSON-RPC Methode und `window`
 - Visueller Lovelace-Editor (GUI) zum Bearbeiten der Card-Konfiguration
 - `window`-Auswahl im Editor als Dropdown (`videolibrary`, `musiclibrary`, `videos`)
-- Optionaler Debug-Modus mit Rueckmeldungsfeld in der Kachel
+- Optionaler Debug-Modus mit Rueckmeldungsfeld in der Kachel (letzte 5 Aufrufe)
 
 ## Installation
 

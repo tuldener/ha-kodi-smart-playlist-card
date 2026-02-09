@@ -31,6 +31,9 @@ class KodiSmartPlaylistCard extends HTMLElement {
       debug: false,
       ...config,
     };
+    if (!Array.isArray(this._debugHistory)) {
+      this._debugHistory = [];
+    }
 
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
@@ -113,11 +116,24 @@ class KodiSmartPlaylistCard extends HTMLElement {
       )
       .join("");
 
+    const debugEntries = this._debugHistory && this._debugHistory.length > 0 ? this._debugHistory : [];
+    const debugItems = debugEntries
+      .map(
+        function (entry, index) {
+          const nr = debugEntries.length - index;
+          const open = index === 0 ? "open" : "";
+          return `<details class="debug-entry" ${open}>
+            <summary>Eintrag ${nr}</summary>
+            <pre>${this._escape(entry)}</pre>
+          </details>`;
+        }.bind(this)
+      )
+      .join("");
     const debugBlock =
       this._config.debug
         ? `<div class="debug">
-            <div class="debug-title">Debug Rueckmeldung</div>
-            <pre>${this._escape(this._debugOutput || "Noch keine Rueckmeldung.")}</pre>
+            <div class="debug-title">Debug Rueckmeldungen (letzte 5)</div>
+            ${debugItems || "<pre>Noch keine Rueckmeldung.</pre>"}
           </div>`
         : "";
 
@@ -219,6 +235,20 @@ class KodiSmartPlaylistCard extends HTMLElement {
           line-height: 1.3;
           font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
+
+        .debug-entry {
+          margin-top: 6px;
+          border: 1px solid var(--divider-color);
+          border-radius: 6px;
+          padding: 4px 8px;
+        }
+
+        .debug-entry summary {
+          cursor: pointer;
+          font-size: 0.78rem;
+          color: var(--secondary-text-color);
+          margin: 2px 0;
+        }
       </style>
     `;
 
@@ -268,7 +298,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
       if (config.debug) {
-        this._debugOutput = this._formatDebug("success", serviceData, response);
+        this._pushDebug(this._formatDebug("success", serviceData, response));
       }
 
       this._showToast("Playlist gestartet: " + entry.name);
@@ -276,7 +306,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
     } catch (err) {
       const message = (err && err.message) || "Unbekannter Fehler";
       if (config.debug) {
-        this._debugOutput = this._formatDebug("error", serviceData, null, err);
+        this._pushDebug(this._formatDebug("error", serviceData, null, err));
       }
       this._showToast("Fehler: " + message);
       this._render();
@@ -336,6 +366,16 @@ class KodiSmartPlaylistCard extends HTMLElement {
       return JSON.stringify(value, null, 2);
     } catch (_error) {
       return String(value);
+    }
+  }
+
+  _pushDebug(entryText) {
+    if (!Array.isArray(this._debugHistory)) {
+      this._debugHistory = [];
+    }
+    this._debugHistory.unshift(String(entryText));
+    if (this._debugHistory.length > 5) {
+      this._debugHistory = this._debugHistory.slice(0, 5);
     }
   }
 }
