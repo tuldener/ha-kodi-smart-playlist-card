@@ -6,7 +6,7 @@ Eine Lovelace-Kachel, die eine oder mehrere Kodi Smart Playlists (`.xsp`) per JS
 
 - Einzelne Playlist (`playlist`) oder mehrere Playlists (`playlists`) in einer Card
 - Nutzt Home Assistant Service `kodi.call_method`
-- Standardaufruf per `GUI.ActivateWindow` mit Playlist als `params.parameters[0]`
+- Standardaufruf per `Player.Open` mit Playlist als `item.partymode`
 - Frei konfigurierbarer Name, Icon, JSON-RPC Methode und `window`
 - Visueller Lovelace-Editor (GUI) zum Bearbeiten der Card-Konfiguration
 - `window`-Auswahl im Editor als Dropdown (`videolibrary`, `musiclibrary`, `videos`)
@@ -27,8 +27,7 @@ name: Filme
 icon: mdi:movie-open-play
 entity: media_player.kodi_wohnzimmer
 playlist: special://profile/playlists/video/Filme.xsp
-method: GUI.ActivateWindow
-window: videolibrary
+method: Player.Open
 ```
 
 ## Beispiel 2: Mehrere Playlists in einer Card
@@ -58,9 +57,9 @@ playlists:
 - Für `.xsp` typischerweise Kodi-Pfade nutzen, z. B.:
   - `special://profile/playlists/video/...`
   - `special://profile/playlists/music/...`
-- Für `type="mixed"` Playlists meist `window: videos` verwenden (nicht `videolibrary`).
-- Standard-Methode ist `GUI.ActivateWindow`.
-- Standard-Window ist `videolibrary`.
+- Bei `method: GUI.ActivateWindow` fuer `type="mixed"` Playlists meist `window: videos` verwenden.
+- Standard-Methode ist `Player.Open`.
+- `window` wird nur fuer `GUI.ActivateWindow` benoetigt.
 
 ## Entspricht folgendem JSON-RPC Muster
 
@@ -69,10 +68,11 @@ Die Card ruft standardmäßig sinngemäß Folgendes auf:
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "GUI.ActivateWindow",
+  "method": "Player.Open",
   "params": {
-    "window": "videolibrary",
-    "parameters": ["special://profile/playlists/video/newmovies.xsp"]
+    "item": {
+      "partymode": "special://profile/playlists/video/newmovies.xsp"
+    }
   },
   "id": 2
 }

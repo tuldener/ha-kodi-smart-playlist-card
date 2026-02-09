@@ -8,7 +8,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       type: "custom:kodi-smart-playlist-card",
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
-      method: "GUI.ActivateWindow",
+      method: "Player.Open",
       window: "videolibrary",
       debug: false,
       entity: "",
@@ -26,7 +26,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
     this._config = {
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
-      method: "GUI.ActivateWindow",
+      method: "Player.Open",
       window: "videolibrary",
       debug: false,
       ...config,
@@ -68,7 +68,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
               name: item.name || item.playlist,
               playlist: item.playlist,
               icon: item.icon || this._config.icon,
-              method: item.method || this._config.method || "GUI.ActivateWindow",
+              method: item.method || this._config.method || "Player.Open",
               window: item.window || this._config.window || "videolibrary",
               params: item.params,
             };
@@ -81,7 +81,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
         name: this._config.name,
         playlist: this._config.playlist,
         icon: this._config.icon,
-        method: this._config.method || "GUI.ActivateWindow",
+        method: this._config.method || "Player.Open",
         window: this._config.window || "videolibrary",
         params: this._config.params,
       },
@@ -277,7 +277,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
     let serviceData = null;
 
     try {
-      const method = entry.method || "GUI.ActivateWindow";
+      const method = entry.method || "Player.Open";
       const windowName = entry.window || config.window || this._guessWindow(entry.playlist);
       serviceData = {
         entity_id: config.entity,
@@ -291,9 +291,9 @@ class KodiSmartPlaylistCard extends HTMLElement {
         serviceData.window = windowName;
         serviceData.parameters = [entry.playlist];
       } else if (method === "Player.Open") {
-        serviceData.item = { file: entry.playlist };
+        serviceData.item = { partymode: entry.playlist };
       } else {
-        serviceData.item = { file: entry.playlist };
+        serviceData.item = { partymode: entry.playlist };
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
@@ -393,7 +393,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       type: "custom:kodi-smart-playlist-card",
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
-      method: "GUI.ActivateWindow",
+      method: "Player.Open",
       window: "videolibrary",
       debug: false,
       entity: "",
@@ -594,7 +594,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         <input data-root="icon" type="text" value="${this._escapeAttr(this._config.icon || "")}" />
 
         <label>JSON-RPC Methode</label>
-        <input data-root="method" type="text" value="${this._escapeAttr(this._config.method || "GUI.ActivateWindow")}" />
+        <input data-root="method" type="text" value="${this._escapeAttr(this._config.method || "Player.Open")}" />
 
         <label>Standard Window</label>
         <select data-root="window">
