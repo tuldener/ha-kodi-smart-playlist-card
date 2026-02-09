@@ -8,7 +8,8 @@ Eine Lovelace-Kachel, die eine oder mehrere Kodi Smart Playlists (`.xsp`) per JS
 - Nutzt Home Assistant Service `kodi.call_method`
 - Standardaufruf per `Player.Open` mit Playlist als `item.partymode`
 - Frei konfigurierbarer Name, Icon, JSON-RPC Methode und `window`
-- `open_mode` pro Playlist waehlt zwischen `partymode`, `file` und `xbmc_builtin_party`
+- `open_mode` pro Playlist waehlt zwischen `partymode` und `file`
+- Optionale Schalter `repeat_all` und `random_on` (global oder pro Playlist)
 - Visueller Lovelace-Editor (GUI) zum Bearbeiten der Card-Konfiguration
 - `window`-Auswahl im Editor als Dropdown (`videolibrary`, `musiclibrary`, `videos`)
 - Optionaler Debug-Modus mit Rueckmeldungsfeld in der Kachel (letzte 5 Aufrufe)
@@ -30,6 +31,8 @@ entity: media_player.kodi_wohnzimmer
 playlist: special://profile/playlists/video/Filme.xsp
 method: Player.Open
 open_mode: file
+repeat_all: true
+random_on: true
 ```
 
 ## Beispiel 2: Mehrere Playlists in einer Card
@@ -46,6 +49,8 @@ playlists:
     playlist: special://profile/playlists/video/Filme.xsp
   - name: Serien
     icon: mdi:television-play
+    repeat_all: true
+    random_on: true
     window: videolibrary
     playlist: special://profile/playlists/video/Serien.xsp
   - name: Musik Favoriten
@@ -65,10 +70,8 @@ playlists:
 - `window` wird nur fuer `GUI.ActivateWindow` benoetigt.
 - `open_mode: partymode` zeigt oft nur eine kleine, dynamische Queue.
 - `open_mode: file` laedt die komplette Smart Playlist.
-- `open_mode: xbmc_builtin_party` fuehrt `XBMC.ExecuteBuiltin` aus:
-  - `PlayMedia(<playlist>)`
-  - `PlayerControl(RepeatAll)`
-  - `PlayerControl(RandomOn)`
+- `repeat_all: true` setzt nach dem Start `repeat=all` ueber `media_player.repeat_set`.
+- `random_on: true` setzt nach dem Start `shuffle=true` ueber `media_player.shuffle_set`.
 
 ## Entspricht folgendem JSON-RPC Muster
 
