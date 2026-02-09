@@ -6,7 +6,8 @@ Eine Lovelace-Kachel, die eine oder mehrere Kodi Smart Playlists (`.xsp`) per JS
 
 - Einzelne Playlist (`playlist`) oder mehrere Playlists (`playlists`) in einer Card
 - Nutzt Home Assistant Service `kodi.call_method`
-- Frei konfigurierbarer Name, Icon und JSON-RPC Methode
+- Standardaufruf per `GUI.ActivateWindow` mit Playlist als `params.parameters[0]`
+- Frei konfigurierbarer Name, Icon, JSON-RPC Methode und `window`
 - Visueller Lovelace-Editor (GUI) zum Bearbeiten der Card-Konfiguration
 
 ## Installation
@@ -24,7 +25,8 @@ name: Filme
 icon: mdi:movie-open-play
 entity: media_player.kodi_wohnzimmer
 playlist: special://profile/playlists/video/Filme.xsp
-method: Player.Open
+method: GUI.ActivateWindow
+window: videolibrary
 ```
 
 ## Beispiel 2: Mehrere Playlists in einer Card
@@ -36,12 +38,15 @@ entity: media_player.kodi_wohnzimmer
 playlists:
   - name: Filme
     icon: mdi:movie-open-play
+    window: videolibrary
     playlist: special://profile/playlists/video/Filme.xsp
   - name: Serien
     icon: mdi:television-play
+    window: videolibrary
     playlist: special://profile/playlists/video/Serien.xsp
   - name: Musik Favoriten
     icon: mdi:music
+    window: musiclibrary
     playlist: special://profile/playlists/music/Favoriten.xsp
 ```
 
@@ -51,4 +56,21 @@ playlists:
 - Für `.xsp` typischerweise Kodi-Pfade nutzen, z. B.:
   - `special://profile/playlists/video/...`
   - `special://profile/playlists/music/...`
-- Standard-Methode ist `Player.Open`.
+- Standard-Methode ist `GUI.ActivateWindow`.
+- Standard-Window ist `videolibrary`.
+
+## Entspricht folgendem JSON-RPC Muster
+
+Die Card ruft standardmäßig sinngemäß Folgendes auf:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "GUI.ActivateWindow",
+  "params": {
+    "window": "videolibrary",
+    "parameters": ["special://profile/playlists/video/newmovies.xsp"]
+  },
+  "id": 2
+}
+```

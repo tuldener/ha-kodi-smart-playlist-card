@@ -8,7 +8,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
       type: "custom:kodi-smart-playlist-card",
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
-      method: "Player.Open",
+      method: "GUI.ActivateWindow",
+      window: "videolibrary",
       entity: "",
       playlists: [
         {
@@ -24,7 +25,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
     this._config = {
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
-      method: "Player.Open",
+      method: "GUI.ActivateWindow",
+      window: "videolibrary",
       ...config,
     };
 
@@ -61,7 +63,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
               name: item.name || item.playlist,
               playlist: item.playlist,
               icon: item.icon || this._config.icon,
-              method: item.method || this._config.method || "Player.Open",
+              method: item.method || this._config.method || "GUI.ActivateWindow",
+              window: item.window || this._config.window || "videolibrary",
               params: item.params,
             };
           }.bind(this)
@@ -73,7 +76,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
         name: this._config.name,
         playlist: this._config.playlist,
         icon: this._config.icon,
-        method: this._config.method || "Player.Open",
+        method: this._config.method || "GUI.ActivateWindow",
+        window: this._config.window || "videolibrary",
         params: this._config.params,
       },
     ];
@@ -211,13 +215,16 @@ class KodiSmartPlaylistCard extends HTMLElement {
     }
 
     try {
+      const method = entry.method || "GUI.ActivateWindow";
+      const params = entry.params || {
+        window: entry.window || config.window || "videolibrary",
+        parameters: [entry.playlist],
+      };
+
       await this._hass.callService("kodi", "call_method", {
         entity_id: config.entity,
-        method: entry.method || "Player.Open",
-        item: {
-          file: entry.playlist,
-        },
-        params: entry.params,
+        method: method,
+        params: params,
       });
 
       this._showToast("Playlist gestartet: " + entry.name);
@@ -259,7 +266,8 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       type: "custom:kodi-smart-playlist-card",
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
-      method: "Player.Open",
+      method: "GUI.ActivateWindow",
+      window: "videolibrary",
       entity: "",
       ...config,
     };
@@ -270,6 +278,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           {
             name: this._config.name || "Playlist",
             icon: this._config.icon || "mdi:playlist-play",
+            window: this._config.window || "videolibrary",
             playlist: this._config.playlist,
           },
         ];
@@ -278,6 +287,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           {
             name: "Neue Playlist",
             icon: this._config.icon || "mdi:playlist-play",
+            window: this._config.window || "videolibrary",
             playlist: "",
           },
         ];
@@ -335,6 +345,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       {
         name: "Neue Playlist",
         icon: this._config.icon || "mdi:playlist-play",
+        window: this._config.window || "videolibrary",
         playlist: "",
       },
     ]);
@@ -358,6 +369,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       playlists.push({
         name: "Neue Playlist",
         icon: this._config.icon || "mdi:playlist-play",
+        window: this._config.window || "videolibrary",
         playlist: "",
       });
     }
@@ -422,6 +434,9 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               <label>Icon (mdi:...)</label>
               <input data-field="icon" data-index="${index}" type="text" value="${this._escapeAttr(item.icon || "")}" />
 
+              <label>Window (z. B. videolibrary/musiclibrary)</label>
+              <input data-field="window" data-index="${index}" type="text" value="${this._escapeAttr(item.window || this._config.window || "videolibrary")}" />
+
               <label>Playlist-Pfad (.xsp)</label>
               <input data-field="playlist" data-index="${index}" type="text" value="${this._escapeAttr(item.playlist || "")}" />
             </div>
@@ -445,7 +460,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         <input data-root="icon" type="text" value="${this._escapeAttr(this._config.icon || "")}" />
 
         <label>JSON-RPC Methode</label>
-        <input data-root="method" type="text" value="${this._escapeAttr(this._config.method || "Player.Open")}" />
+        <input data-root="method" type="text" value="${this._escapeAttr(this._config.method || "GUI.ActivateWindow")}" />
+
+        <label>Standard Window</label>
+        <input data-root="window" type="text" value="${this._escapeAttr(this._config.window || "videolibrary")}" />
 
         <div class="section-head">
           <div>Playlists</div>
