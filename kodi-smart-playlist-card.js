@@ -21,14 +21,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.entity) {
-      throw new Error("`entity` ist erforderlich (Kodi media_player Entitaet).");
-    }
-
-    if (!config.playlist && (!Array.isArray(config.playlists) || config.playlists.length === 0)) {
-      throw new Error("`playlist` oder `playlists` ist erforderlich.");
-    }
-
     this._config = {
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
@@ -96,6 +88,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
     const state = stateObj && stateObj.state ? stateObj.state : "unavailable";
     const disabled = !this._hass || !stateObj;
     const entries = this._getEntries();
+    const hasEntity = !!this._config.entity;
+    const hasEntries = entries.length > 0;
 
     const rows = entries
       .map(
@@ -120,6 +114,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
           <div class="status">Kodi: ${this._escape(state)}</div>
         </div>
         <div class="list">${rows}</div>
+        ${!hasEntity ? '<div class="hint">Bitte im Editor eine Kodi-Entity auswaehlen.</div>' : ""}
+        ${!hasEntries ? '<div class="hint">Bitte mindestens eine Playlist konfigurieren.</div>' : ""}
       </ha-card>
       <style>
         :host { display: block; }
@@ -181,6 +177,13 @@ class KodiSmartPlaylistCard extends HTMLElement {
           line-height: 1.2;
           word-break: break-all;
         }
+
+        .hint {
+          border-top: 1px solid var(--divider-color);
+          padding: 10px 16px;
+          color: var(--secondary-text-color);
+          font-size: 0.8rem;
+        }
       </style>
     `;
 
@@ -194,6 +197,10 @@ class KodiSmartPlaylistCard extends HTMLElement {
   async _handleTap(index) {
     const config = this._config;
     if (!this._hass || !config) {
+      return;
+    }
+    if (!config.entity) {
+      this._showToast("Bitte zuerst eine Kodi-Entity konfigurieren.");
       return;
     }
 
@@ -371,6 +378,34 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     }
 
     const playlists = this._config.playlists || [];
+    const kodiEntities = this._getKodiEntities();
+    const hasCurrentEntity = !!this._config.entity;
+    const knownEntity = kodiEntities.some(
+      function (item) {
+        return item.entity_id === this._config.entity;
+      }.bind(this)
+    );
+    const entityOptions = []
+      .concat(
+        hasCurrentEntity && !knownEntity
+          ? [
+              {
+                entity_id: this._config.entity,
+                name: this._config.entity + " (manuell)",
+              },
+            ]
+          : []
+      )
+      .concat(kodiEntities)
+      .map(
+        function (item) {
+          const selected = item.entity_id === this._config.entity ? "selected" : "";
+          return `<option value="${this._escapeAttr(item.entity_id)}" ${selected}>${this._escape(
+            item.name
+          )} (${this._escape(item.entity_id)})</option>`;
+        }.bind(this)
+      )
+      .join("");
 
     const playlistRows = playlists
       .map(
@@ -398,7 +433,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <div class="editor">
         <label>Kodi Entity (media_player...)</label>
-        <input data-root="entity" type="text" value="${this._escapeAttr(this._config.entity || "")}" placeholder="media_player.kodi_wohnzimmer" />
+        <select data-root="entity">
+          <option value="" ${!this._config.entity ? "selected" : ""}>Bitte waehlen...</option>
+          ${entityOptions}
+        </select>
 
         <label>Kartenname</label>
         <input data-root="name" type="text" value="${this._escapeAttr(this._config.name || "")}" />
@@ -470,6 +508,17 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           font: inherit;
         }
 
+        select {
+          width: 100%;
+          box-sizing: border-box;
+          padding: 8px 10px;
+          border: 1px solid var(--divider-color);
+          border-radius: 6px;
+          background: var(--card-background-color);
+          color: var(--primary-text-color);
+          font: inherit;
+        }
+
         button {
           border: 1px solid var(--divider-color);
           background: var(--card-background-color);
@@ -493,6 +542,14 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       input.addEventListener("change", () => {
         const field = input.getAttribute("data-root");
         this._updateRootField(field, input.value);
+      });
+    }
+    const rootSelects = this.shadowRoot.querySelectorAll("select[data-root]");
+    for (let i = 0; i < rootSelects.length; i += 1) {
+      const select = rootSelects[i];
+      select.addEventListener("change", () => {
+        const field = select.getAttribute("data-root");
+        this._updateRootField(field, select.value);
       });
     }
 
@@ -527,6 +584,44 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  _escape(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  _getKodiEntities() {
+    if (!this._hass || !this._hass.states) {
+      return [];
+    }
+
+    return Object.keys(this._hass.states)
+      .filter(
+        function (entityId) {
+          return entityId.indexOf("media_player.") === 0;
+        }.bind(this)
+      )
+      .map(
+        function (entityId) {
+          const stateObj = this._hass.states[entityId];
+          const friendlyName =
+            (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
+          return {
+            entity_id: entityId,
+            name: friendlyName,
+            is_kodi: /kodi/i.test(entityId + " " + friendlyName),
+          };
+        }.bind(this)
+      )
+      .filter(function (item) {
+        return item.is_kodi;
+      })
+      .sort(function (a, b) {
+        return a.name.localeCompare(b.name);
+      });
   }
 }
 
