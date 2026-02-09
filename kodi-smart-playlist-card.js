@@ -10,6 +10,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       icon: "mdi:playlist-play",
       method: "GUI.ActivateWindow",
       window: "videolibrary",
+      debug: false,
       entity: "",
       playlists: [
         {
@@ -27,6 +28,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       icon: "mdi:playlist-play",
       method: "GUI.ActivateWindow",
       window: "videolibrary",
+      debug: false,
       ...config,
     };
 
@@ -111,6 +113,14 @@ class KodiSmartPlaylistCard extends HTMLElement {
       )
       .join("");
 
+    const debugBlock =
+      this._config.debug
+        ? `<div class="debug">
+            <div class="debug-title">Debug Rueckmeldung</div>
+            <pre>${this._escape(this._debugOutput || "Noch keine Rueckmeldung.")}</pre>
+          </div>`
+        : "";
+
     this.shadowRoot.innerHTML = `
       <ha-card>
         <div class="header">
@@ -120,6 +130,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
         <div class="list">${rows}</div>
         ${!hasEntity ? '<div class="hint">Bitte im Editor eine Kodi-Entity auswaehlen.</div>' : ""}
         ${!hasEntries ? '<div class="hint">Bitte mindestens eine Playlist konfigurieren.</div>' : ""}
+        ${debugBlock}
       </ha-card>
       <style>
         :host { display: block; }
@@ -188,6 +199,26 @@ class KodiSmartPlaylistCard extends HTMLElement {
           color: var(--secondary-text-color);
           font-size: 0.8rem;
         }
+
+        .debug {
+          border-top: 1px solid var(--divider-color);
+          padding: 10px 16px;
+        }
+
+        .debug-title {
+          font-size: 0.8rem;
+          color: var(--secondary-text-color);
+          margin-bottom: 6px;
+        }
+
+        .debug pre {
+          margin: 0;
+          white-space: pre-wrap;
+          word-break: break-word;
+          font-size: 0.75rem;
+          line-height: 1.3;
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
       </style>
     `;
 
@@ -213,11 +244,12 @@ class KodiSmartPlaylistCard extends HTMLElement {
     if (!entry) {
       return;
     }
+    let serviceData = null;
 
     try {
       const method = entry.method || "GUI.ActivateWindow";
       const windowName = entry.window || config.window || this._guessWindow(entry.playlist);
-      const serviceData = {
+      serviceData = {
         entity_id: config.entity,
         method: method,
       };
@@ -234,12 +266,20 @@ class KodiSmartPlaylistCard extends HTMLElement {
         serviceData.item = { file: entry.playlist };
       }
 
-      await this._hass.callService("kodi", "call_method", serviceData);
+      const response = await this._hass.callService("kodi", "call_method", serviceData);
+      if (config.debug) {
+        this._debugOutput = this._formatDebug("success", serviceData, response);
+      }
 
       this._showToast("Playlist gestartet: " + entry.name);
+      this._render();
     } catch (err) {
       const message = (err && err.message) || "Unbekannter Fehler";
+      if (config.debug) {
+        this._debugOutput = this._formatDebug("error", serviceData, null, err);
+      }
       this._showToast("Fehler: " + message);
+      this._render();
     }
   }
 
@@ -271,6 +311,33 @@ class KodiSmartPlaylistCard extends HTMLElement {
     }
     return "videolibrary";
   }
+
+  _formatDebug(status, requestPayload, responsePayload, err) {
+    const parts = [];
+    parts.push("status: " + status);
+    parts.push("time: " + new Date().toISOString());
+    if (requestPayload) {
+      parts.push("request:");
+      parts.push(this._toJsonString(requestPayload));
+    }
+    if (responsePayload !== undefined) {
+      parts.push("response:");
+      parts.push(this._toJsonString(responsePayload));
+    }
+    if (err) {
+      parts.push("error:");
+      parts.push((err && err.message) || String(err));
+    }
+    return parts.join("\n");
+  }
+
+  _toJsonString(value) {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (_error) {
+      return String(value);
+    }
+  }
 }
 
 class KodiSmartPlaylistCardEditor extends HTMLElement {
@@ -288,6 +355,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       icon: "mdi:playlist-play",
       method: "GUI.ActivateWindow",
       window: "videolibrary",
+      debug: false,
       entity: "",
       ...config,
     };
@@ -333,7 +401,11 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
   }
 
   _updateRootField(field, value) {
-    const next = { ...this._config, [field]: value };
+    let normalizedValue = value;
+    if (field === "debug") {
+      normalizedValue = value === "true";
+    }
+    const next = { ...this._config, [field]: normalizedValue };
     delete next.playlist;
     this._config = next;
     this._emitConfig(next);
@@ -454,8 +526,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               <label>Icon (mdi:...)</label>
               <input data-field="icon" data-index="${index}" type="text" value="${this._escapeAttr(item.icon || "")}" />
 
-              <label>Window (z. B. videolibrary/musiclibrary)</label>
-              <input data-field="window" data-index="${index}" type="text" value="${this._escapeAttr(item.window || this._config.window || "videolibrary")}" />
+              <label>Window</label>
+              <select data-field="window" data-index="${index}">
+                ${this._getWindowOptions(item.window || this._config.window || "videolibrary")}
+              </select>
 
               <label>Playlist-Pfad (.xsp)</label>
               <input data-field="playlist" data-index="${index}" type="text" value="${this._escapeAttr(item.playlist || "")}" />
@@ -483,7 +557,15 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         <input data-root="method" type="text" value="${this._escapeAttr(this._config.method || "GUI.ActivateWindow")}" />
 
         <label>Standard Window</label>
-        <input data-root="window" type="text" value="${this._escapeAttr(this._config.window || "videolibrary")}" />
+        <select data-root="window">
+          ${this._getWindowOptions(this._config.window || "videolibrary")}
+        </select>
+
+        <label>Debug</label>
+        <select data-root="debug">
+          <option value="false" ${this._config.debug ? "" : "selected"}>Aus</option>
+          <option value="true" ${this._config.debug ? "selected" : ""}>Ein</option>
+        </select>
 
         <div class="section-head">
           <div>Playlists</div>
@@ -600,6 +682,15 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         this._updatePlaylistField(index, field, input.value);
       });
     }
+    const playlistSelects = this.shadowRoot.querySelectorAll("select[data-field]");
+    for (let i = 0; i < playlistSelects.length; i += 1) {
+      const select = playlistSelects[i];
+      select.addEventListener("change", () => {
+        const field = select.getAttribute("data-field");
+        const index = Number(select.getAttribute("data-index"));
+        this._updatePlaylistField(index, field, select.value);
+      });
+    }
 
     const removeButtons = this.shadowRoot.querySelectorAll("button[data-action='remove']");
     for (let i = 0; i < removeButtons.length; i += 1) {
@@ -629,6 +720,17 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
+  }
+
+  _getWindowOptions(selectedWindow) {
+    const baseOptions = ["videolibrary", "musiclibrary", "videos"];
+    const options = baseOptions.indexOf(selectedWindow) === -1 ? [selectedWindow].concat(baseOptions) : baseOptions;
+    return options
+      .map(function (name) {
+        const selected = name === selectedWindow ? "selected" : "";
+        return `<option value="${this._escapeAttr(name)}" ${selected}>${this._escape(name)}</option>`;
+      }.bind(this))
+      .join("");
   }
 
   _getKodiEntities() {
