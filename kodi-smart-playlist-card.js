@@ -598,7 +598,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       return [];
     }
 
-    return Object.keys(this._hass.states)
+    const allMediaPlayers = Object.keys(this._hass.states)
       .filter(
         function (entityId) {
           return entityId.indexOf("media_player.") === 0;
@@ -616,12 +616,15 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           };
         }.bind(this)
       )
-      .filter(function (item) {
-        return item.is_kodi;
-      })
       .sort(function (a, b) {
         return a.name.localeCompare(b.name);
       });
+
+    const kodiMatches = allMediaPlayers.filter(function (item) {
+        return item.is_kodi;
+      });
+
+    return kodiMatches.length > 0 ? kodiMatches : allMediaPlayers;
   }
 }
 
