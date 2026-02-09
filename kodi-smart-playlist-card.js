@@ -216,16 +216,25 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
     try {
       const method = entry.method || "GUI.ActivateWindow";
-      const params = entry.params || {
-        window: entry.window || config.window || "videolibrary",
-        parameters: [entry.playlist],
-      };
-
-      await this._hass.callService("kodi", "call_method", {
+      const windowName = entry.window || config.window || this._guessWindow(entry.playlist);
+      const serviceData = {
         entity_id: config.entity,
         method: method,
-        params: params,
-      });
+      };
+
+      // Home Assistant kodi.call_method expects method parameters as top-level fields.
+      if (entry.params && typeof entry.params === "object" && !Array.isArray(entry.params)) {
+        Object.assign(serviceData, entry.params);
+      } else if (method === "GUI.ActivateWindow") {
+        serviceData.window = windowName;
+        serviceData.parameters = [entry.playlist];
+      } else if (method === "Player.Open") {
+        serviceData.item = { file: entry.playlist };
+      } else {
+        serviceData.item = { file: entry.playlist };
+      }
+
+      await this._hass.callService("kodi", "call_method", serviceData);
 
       this._showToast("Playlist gestartet: " + entry.name);
     } catch (err) {
@@ -250,6 +259,17 @@ class KodiSmartPlaylistCard extends HTMLElement {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+  _guessWindow(playlist) {
+    const path = String(playlist || "").toLowerCase();
+    if (path.indexOf("/playlists/music/") !== -1) {
+      return "musiclibrary";
+    }
+    if (path.indexOf("/playlists/mixed/") !== -1) {
+      return "videos";
+    }
+    return "videolibrary";
   }
 }
 

@@ -56,6 +56,7 @@ playlists:
 - Für `.xsp` typischerweise Kodi-Pfade nutzen, z. B.:
   - `special://profile/playlists/video/...`
   - `special://profile/playlists/music/...`
+- Für `type="mixed"` Playlists meist `window: videos` verwenden (nicht `videolibrary`).
 - Standard-Methode ist `GUI.ActivateWindow`.
 - Standard-Window ist `videolibrary`.
 
