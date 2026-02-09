@@ -9,6 +9,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
       method: "Player.Open",
+      open_mode: "partymode",
       window: "videolibrary",
       debug: false,
       entity: "",
@@ -27,6 +28,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
       method: "Player.Open",
+      open_mode: "partymode",
       window: "videolibrary",
       debug: false,
       ...config,
@@ -69,6 +71,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
               playlist: item.playlist,
               icon: item.icon || this._config.icon,
               method: item.method || this._config.method || "Player.Open",
+              open_mode: item.open_mode || this._config.open_mode || "partymode",
               window: item.window || this._config.window || "videolibrary",
               params: item.params,
             };
@@ -82,6 +85,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
         playlist: this._config.playlist,
         icon: this._config.icon,
         method: this._config.method || "Player.Open",
+        open_mode: this._config.open_mode || "partymode",
         window: this._config.window || "videolibrary",
         params: this._config.params,
       },
@@ -291,9 +295,11 @@ class KodiSmartPlaylistCard extends HTMLElement {
         serviceData.window = windowName;
         serviceData.parameters = [entry.playlist];
       } else if (method === "Player.Open") {
-        serviceData.item = { partymode: entry.playlist };
+        const openMode = entry.open_mode || config.open_mode || "partymode";
+        serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       } else {
-        serviceData.item = { partymode: entry.playlist };
+        const openMode = entry.open_mode || config.open_mode || "partymode";
+        serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
@@ -394,6 +400,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
       method: "Player.Open",
+      open_mode: "partymode",
       window: "videolibrary",
       debug: false,
       entity: "",
@@ -406,6 +413,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           {
             name: this._config.name || "Playlist",
             icon: this._config.icon || "mdi:playlist-play",
+            open_mode: this._config.open_mode || "partymode",
             window: this._config.window || "videolibrary",
             playlist: this._config.playlist,
           },
@@ -415,6 +423,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           {
             name: "Neue Playlist",
             icon: this._config.icon || "mdi:playlist-play",
+            open_mode: this._config.open_mode || "partymode",
             window: this._config.window || "videolibrary",
             playlist: "",
           },
@@ -477,6 +486,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       {
         name: "Neue Playlist",
         icon: this._config.icon || "mdi:playlist-play",
+        open_mode: this._config.open_mode || "partymode",
         window: this._config.window || "videolibrary",
         playlist: "",
       },
@@ -501,6 +511,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       playlists.push({
         name: "Neue Playlist",
         icon: this._config.icon || "mdi:playlist-play",
+        open_mode: this._config.open_mode || "partymode",
         window: this._config.window || "videolibrary",
         playlist: "",
       });
@@ -571,6 +582,11 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
                 ${this._getWindowOptions(item.window || this._config.window || "videolibrary")}
               </select>
 
+              <label>Open Mode</label>
+              <select data-field="open_mode" data-index="${index}">
+                ${this._getOpenModeOptions(item.open_mode || this._config.open_mode || "partymode")}
+              </select>
+
               <label>Playlist-Pfad (.xsp)</label>
               <input data-field="playlist" data-index="${index}" type="text" value="${this._escapeAttr(item.playlist || "")}" />
             </div>
@@ -595,6 +611,11 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
 
         <label>JSON-RPC Methode</label>
         <input data-root="method" type="text" value="${this._escapeAttr(this._config.method || "Player.Open")}" />
+
+        <label>Standard Open Mode</label>
+        <select data-root="open_mode">
+          ${this._getOpenModeOptions(this._config.open_mode || "partymode")}
+        </select>
 
         <label>Standard Window</label>
         <select data-root="window">
@@ -770,6 +791,20 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         const selected = name === selectedWindow ? "selected" : "";
         return `<option value="${this._escapeAttr(name)}" ${selected}>${this._escape(name)}</option>`;
       }.bind(this))
+      .join("");
+  }
+
+  _getOpenModeOptions(selectedMode) {
+    const modes = ["partymode", "file"];
+    const options = modes.indexOf(selectedMode) === -1 ? [selectedMode].concat(modes) : modes;
+    return options
+      .map(
+        function (mode) {
+          const selected = mode === selectedMode ? "selected" : "";
+          const label = mode === "file" ? "file (komplette Playlist)" : "partymode (dynamisch)";
+          return `<option value="${this._escapeAttr(mode)}" ${selected}>${this._escape(label)}</option>`;
+        }.bind(this)
+      )
       .join("");
   }
 
