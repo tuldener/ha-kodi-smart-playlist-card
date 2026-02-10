@@ -22,7 +22,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
-      control_player_id: "auto",
       debug: false,
       entity: "",
       playlists: [
@@ -42,18 +41,11 @@ class KodiSmartPlaylistCard extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
-      control_player_id: "auto",
       debug: false,
       ...config,
     };
     if (!Array.isArray(this._debugHistory)) {
       this._debugHistory = [];
-    }
-    if (typeof this._repeatEnabled !== "boolean") {
-      this._repeatEnabled = false;
-    }
-    if (typeof this._shuffleEnabled !== "boolean") {
-      this._shuffleEnabled = false;
     }
 
     if (!this.shadowRoot) {
@@ -167,26 +159,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
           <div class="status">Kodi: ${this._escape(state)}</div>
         </div>
         <div class="list">${rows}</div>
-        <div class="controls">
-          <button
-            class="control-btn ${this._repeatEnabled ? "active" : ""}"
-            data-action="toggle-repeat"
-            title="Repeat All Ein/Aus"
-            aria-label="Repeat All Ein/Aus"
-            ${disabled ? "disabled" : ""}
-          >
-            <ha-icon icon="${this._repeatEnabled ? "mdi:repeat" : "mdi:repeat-off"}"></ha-icon>
-          </button>
-          <button
-            class="control-btn ${this._shuffleEnabled ? "active" : ""}"
-            data-action="toggle-shuffle"
-            title="Zufaellige Folge Ein/Aus"
-            aria-label="Zufaellige Folge Ein/Aus"
-            ${disabled ? "disabled" : ""}
-          >
-            <ha-icon icon="${this._shuffleEnabled ? "mdi:shuffle" : "mdi:shuffle-disabled"}"></ha-icon>
-          </button>
-        </div>
         ${!hasEntity ? '<div class="hint">Bitte im Editor eine Kodi-Entity auswaehlen.</div>' : ""}
         ${!hasEntries ? '<div class="hint">Bitte mindestens eine Playlist konfigurieren.</div>' : ""}
         ${debugBlock}
@@ -233,40 +205,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
         .playlist-row:last-child { border-bottom: 0; }
         .playlist-row:disabled { cursor: not-allowed; opacity: 0.6; }
-
-        .controls {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-          padding: 10px 16px;
-          border-top: 1px solid var(--divider-color);
-        }
-
-        .control-btn {
-          border: 1px solid var(--divider-color);
-          border-radius: 999px;
-          background: var(--card-background-color);
-          color: var(--primary-text-color);
-          width: 44px;
-          height: 44px;
-          padding: 0;
-          font: inherit;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .control-btn:disabled {
-          cursor: not-allowed;
-          opacity: 0.6;
-        }
-
-        .control-btn.active {
-          border-color: var(--primary-color);
-          color: var(--primary-color);
-          background: color-mix(in srgb, var(--primary-color) 12%, transparent);
-        }
 
         ha-icon {
           color: var(--primary-color);
@@ -333,14 +271,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
     for (let i = 0; i < buttons.length; i += 1) {
       const button = buttons[i];
       button.addEventListener("click", () => this._handleTap(i));
-    }
-    const toggleRepeatBtn = this.shadowRoot.querySelector("button[data-action='toggle-repeat']");
-    if (toggleRepeatBtn) {
-      toggleRepeatBtn.addEventListener("click", () => this._handleToggleRepeat());
-    }
-    const toggleShuffleBtn = this.shadowRoot.querySelector("button[data-action='toggle-shuffle']");
-    if (toggleShuffleBtn) {
-      toggleShuffleBtn.addEventListener("click", () => this._handleToggleShuffle());
     }
   }
 
@@ -452,84 +382,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return parts.join("\n");
   }
 
-  _extractActivePlayers(response) {
-    if (Array.isArray(response)) {
-      return response;
-    }
-    if (response && Array.isArray(response.result)) {
-      return response.result;
-    }
-    if (response && response.result && Array.isArray(response.result.result)) {
-      return response.result.result;
-    }
-    return [];
-  }
-
-  async _handleToggleRepeat() {
-    const config = this._config;
-    if (!this._hass || !config || !config.entity) {
-      return;
-    }
-    try {
-      const next = !this._repeatEnabled;
-      const repeatValue = next ? "all" : "off";
-      const request = {
-        entity_id: config.entity,
-        method: "Player.SetRepeat",
-        repeat: repeatValue,
-      };
-      if (config.control_player_id !== "auto" && config.control_player_id !== "" && config.control_player_id !== null) {
-        request.playerid = Number(config.control_player_id);
-      }
-      const response = await this._hass.callService("kodi", "call_method", request);
-      this._repeatEnabled = next;
-      if (config.debug) {
-        this._pushDebug(this._formatDebug("success", request, response));
-      }
-      this._showToast("Repeat: " + (next ? "Ein" : "Aus"));
-      this._render();
-    } catch (err) {
-      const message = (err && err.message) || "Unbekannter Fehler";
-      if (config.debug) {
-        this._pushDebug(this._formatDebug("error", { method: "Player.SetRepeat" }, null, err));
-      }
-      this._showToast("Fehler Repeat: " + message);
-      this._render();
-    }
-  }
-
-  async _handleToggleShuffle() {
-    const config = this._config;
-    if (!this._hass || !config || !config.entity) {
-      return;
-    }
-    try {
-      const next = !this._shuffleEnabled;
-      const request = {
-        entity_id: config.entity,
-        method: "Player.SetShuffle",
-        shuffle: next,
-      };
-      if (config.control_player_id !== "auto" && config.control_player_id !== "" && config.control_player_id !== null) {
-        request.playerid = Number(config.control_player_id);
-      }
-      const response = await this._hass.callService("kodi", "call_method", request);
-      this._shuffleEnabled = next;
-      if (config.debug) {
-        this._pushDebug(this._formatDebug("success", request, response));
-      }
-      this._showToast("Shuffle: " + (next ? "Ein" : "Aus"));
-      this._render();
-    } catch (err) {
-      const message = (err && err.message) || "Unbekannter Fehler";
-      if (config.debug) {
-        this._pushDebug(this._formatDebug("error", { method: "Player.SetShuffle" }, null, err));
-      }
-      this._showToast("Fehler Shuffle: " + message);
-      this._render();
-    }
-  }
-
   _toJsonString(value) {
     try {
       return JSON.stringify(value, null, 2);
@@ -565,7 +417,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
-      control_player_id: "auto",
       debug: false,
       entity: "",
       ...config,
@@ -620,10 +471,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     }
     if (field === "open_mode") {
       normalizedValue = normalizeOpenMode(value);
-    }
-    if (field === "control_player_id") {
-      const raw = String(value || "auto");
-      normalizedValue = raw === "0" || raw === "1" ? raw : "auto";
     }
     const next = { ...this._config, [field]: normalizedValue };
     delete next.playlist;
@@ -780,13 +627,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         <select data-root="debug">
           <option value="false" ${this._config.debug ? "" : "selected"}>Aus</option>
           <option value="true" ${this._config.debug ? "selected" : ""}>Ein</option>
-        </select>
-
-        <label>Button Player ID</label>
-        <select data-root="control_player_id">
-          <option value="auto" ${String(this._config.control_player_id || "auto") === "auto" ? "selected" : ""}>auto</option>
-          <option value="0" ${String(this._config.control_player_id || "auto") === "0" ? "selected" : ""}>0</option>
-          <option value="1" ${String(this._config.control_player_id || "auto") === "1" ? "selected" : ""}>1</option>
         </select>
 
         <div class="section-head">
