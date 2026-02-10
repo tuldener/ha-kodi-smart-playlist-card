@@ -324,25 +324,33 @@ class KodiSmartPlaylistCard extends HTMLElement {
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
+      const warnings = [];
       if (method === "Player.Open") {
         if (entry.repeat_all) {
-          await this._hass.callService("media_player", "repeat_set", {
-            entity_id: config.entity,
-            repeat: "all",
-          });
+          await this._callOptionalMediaService(
+            "repeat_set",
+            config.entity,
+            { repeat: "all" },
+            warnings
+          );
         }
         if (entry.random_on) {
-          await this._hass.callService("media_player", "shuffle_set", {
-            entity_id: config.entity,
-            shuffle: true,
-          });
+          await this._callOptionalMediaService(
+            "shuffle_set",
+            config.entity,
+            { shuffle: true },
+            warnings
+          );
         }
       }
       if (config.debug) {
-        this._pushDebug(this._formatDebug("success", serviceData, response));
+        const debugResponse = warnings.length > 0 ? { response: response, warnings: warnings } : response;
+        this._pushDebug(this._formatDebug("success", serviceData, debugResponse));
       }
 
-      this._showToast("Playlist gestartet: " + entry.name);
+      const warningText =
+        warnings.length > 0 ? " (Hinweis: " + warnings.join("; ") + ")" : "";
+      this._showToast("Playlist gestartet: " + entry.name + warningText);
       this._render();
     } catch (err) {
       const message = (err && err.message) || "Unbekannter Fehler";
@@ -404,6 +412,29 @@ class KodiSmartPlaylistCard extends HTMLElement {
       parts.push((err && err.message) || String(err));
     }
     return parts.join("\n");
+  }
+
+  async _callOptionalMediaService(action, entityId, payload, warnings) {
+    try {
+      await this._hass.callService("media_player", action, {
+        entity_id: entityId,
+        ...payload,
+      });
+    } catch (err) {
+      if (this._isUnsupportedMediaActionError(err, action)) {
+        warnings.push(action + " nicht unterstuetzt");
+        return;
+      }
+      throw err;
+    }
+  }
+
+  _isUnsupportedMediaActionError(err, action) {
+    const message = String((err && err.message) || "").toLowerCase();
+    return (
+      message.indexOf("does not support action media_player." + action) !== -1 ||
+      message.indexOf("does not support action") !== -1
+    );
   }
 
   _toJsonString(value) {
