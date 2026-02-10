@@ -305,10 +305,10 @@ class KodiSmartPlaylistCard extends HTMLElement {
         serviceData.window = windowName;
         serviceData.parameters = [entry.playlist];
       } else if (method === "Player.Open") {
-        const openMode = entry.open_mode || config.open_mode || "partymode";
+        const openMode = String(entry.open_mode || config.open_mode || "partymode").trim().toLowerCase();
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       } else {
-        const openMode = entry.open_mode || config.open_mode || "partymode";
+        const openMode = String(entry.open_mode || config.open_mode || "partymode").trim().toLowerCase();
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       }
 
@@ -656,31 +656,8 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         <label>Kartenname</label>
         <input data-root="name" type="text" value="${this._escapeAttr(this._config.name || "")}" />
 
-        <label>Standard-Icon (mdi:...)</label>
-        <input data-root="icon" type="text" value="${this._escapeAttr(this._config.icon || "")}" />
-
-        <label>JSON-RPC Methode</label>
-        <input data-root="method" type="text" value="${this._escapeAttr(this._config.method || "Player.Open")}" />
-
-        <label>Standard Open Mode</label>
-        <select data-root="open_mode">
-          ${this._getOpenModeOptions(this._config.open_mode || "partymode")}
-        </select>
-
-        <label>Standard RepeatAll</label>
-        <select data-root="repeat_all">
-          ${this._getBooleanOptions(!!this._config.repeat_all)}
-        </select>
-
-        <label>Standard RandomOn</label>
-        <select data-root="random_on">
-          ${this._getBooleanOptions(!!this._config.random_on)}
-        </select>
-
-        <label>Standard Window</label>
-        <select data-root="window">
-          ${this._getWindowOptions(this._config.window || "videolibrary")}
-        </select>
+        <label>Standard-Icon</label>
+        <ha-icon-picker data-root="icon" value="${this._escapeAttr(this._config.icon || "mdi:playlist-play")}"></ha-icon-picker>
 
         <label>Debug</label>
         <select data-root="debug">
@@ -760,6 +737,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           font: inherit;
         }
 
+        ha-icon-picker {
+          width: 100%;
+        }
+
         button {
           border: 1px solid var(--divider-color);
           background: var(--card-background-color);
@@ -791,6 +772,23 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       select.addEventListener("change", () => {
         const field = select.getAttribute("data-root");
         this._updateRootField(field, select.value);
+      });
+    }
+    const iconPickers = this.shadowRoot.querySelectorAll("ha-icon-picker[data-root]");
+    for (let i = 0; i < iconPickers.length; i += 1) {
+      const picker = iconPickers[i];
+      if (this._hass) {
+        picker.hass = this._hass;
+      }
+      picker.addEventListener("value-changed", (event) => {
+        const field = picker.getAttribute("data-root");
+        const value =
+          event &&
+          event.detail &&
+          typeof event.detail.value === "string"
+            ? event.detail.value
+            : "";
+        this._updateRootField(field, value);
       });
     }
 
@@ -855,12 +853,21 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
   }
 
   _getOpenModeOptions(selectedMode) {
-    const modes = ["partymode", "file"];
-    const options = modes.indexOf(selectedMode) === -1 ? [selectedMode].concat(modes) : modes;
+    const normalizedSelected = String(selectedMode || "partymode").trim().toLowerCase();
+    const baseModes = ["partymode", "file"];
+    const options = [];
+    if (baseModes.indexOf(normalizedSelected) === -1) {
+      options.push(normalizedSelected);
+    }
+    for (let i = 0; i < baseModes.length; i += 1) {
+      if (options.indexOf(baseModes[i]) === -1) {
+        options.push(baseModes[i]);
+      }
+    }
     return options
       .map(
         function (mode) {
-          const selected = mode === selectedMode ? "selected" : "";
+          const selected = mode === normalizedSelected ? "selected" : "";
           const label =
             mode === "file"
               ? "file (komplette Playlist)"
