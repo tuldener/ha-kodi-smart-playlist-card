@@ -1,3 +1,14 @@
+function normalizeOpenMode(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "file") {
+    return "file";
+  }
+  if (raw.indexOf("file") !== -1) {
+    return "file";
+  }
+  return "partymode";
+}
+
 class KodiSmartPlaylistCard extends HTMLElement {
   static getConfigElement() {
     return document.createElement("kodi-smart-playlist-card-editor");
@@ -75,7 +86,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
               playlist: item.playlist,
               icon: item.icon || this._config.icon || "mdi:playlist-play",
               method: item.method || this._config.method || "Player.Open",
-              open_mode: this._normalizeOpenMode(item.open_mode || this._config.open_mode || "partymode"),
+              open_mode: normalizeOpenMode(item.open_mode || this._config.open_mode || "partymode"),
               window: item.window || this._config.window || "videolibrary",
               repeat_all:
                 typeof item.repeat_all === "boolean" ? item.repeat_all : !!this._config.repeat_all,
@@ -93,7 +104,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
         playlist: this._config.playlist,
         icon: this._config.icon || "mdi:playlist-play",
         method: this._config.method || "Player.Open",
-        open_mode: this._normalizeOpenMode(this._config.open_mode || "partymode"),
+        open_mode: normalizeOpenMode(this._config.open_mode || "partymode"),
         window: this._config.window || "videolibrary",
         repeat_all: !!this._config.repeat_all,
         random_on: !!this._config.random_on,
@@ -305,10 +316,10 @@ class KodiSmartPlaylistCard extends HTMLElement {
         serviceData.window = windowName;
         serviceData.parameters = [entry.playlist];
       } else if (method === "Player.Open") {
-        const openMode = this._normalizeOpenMode(entry.open_mode || config.open_mode || "partymode");
+        const openMode = normalizeOpenMode(entry.open_mode || config.open_mode || "partymode");
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       } else {
-        const openMode = this._normalizeOpenMode(entry.open_mode || config.open_mode || "partymode");
+        const openMode = normalizeOpenMode(entry.open_mode || config.open_mode || "partymode");
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       }
 
@@ -370,17 +381,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       return "videos";
     }
     return "videolibrary";
-  }
-
-  _normalizeOpenMode(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    if (raw === "file") {
-      return "file";
-    }
-    if (raw.indexOf("file") !== -1) {
-      return "file";
-    }
-    return "partymode";
   }
 
   _formatDebug(status, requestPayload, responsePayload, err) {
@@ -499,7 +499,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       normalizedValue = value === "true";
     }
     if (field === "open_mode") {
-      normalizedValue = this._normalizeOpenMode(value);
+      normalizedValue = normalizeOpenMode(value);
     }
     const next = { ...this._config, [field]: normalizedValue };
     delete next.playlist;
@@ -863,19 +863,8 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       .join("");
   }
 
-  _normalizeOpenMode(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    if (raw === "file") {
-      return "file";
-    }
-    if (raw.indexOf("file") !== -1) {
-      return "file";
-    }
-    return "partymode";
-  }
-
   _getOpenModeOptions(selectedMode) {
-    const normalizedSelected = this._normalizeOpenMode(selectedMode || "partymode");
+    const normalizedSelected = normalizeOpenMode(selectedMode || "partymode");
     const options = ["partymode", "file"];
     return options
       .map(
