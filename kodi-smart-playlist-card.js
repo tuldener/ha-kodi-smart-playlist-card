@@ -22,8 +22,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
-      repeat_all: false,
-      random_on: false,
       debug: false,
       entity: "",
       playlists: [
@@ -43,8 +41,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
-      repeat_all: false,
-      random_on: false,
       debug: false,
       ...config,
     };
@@ -88,10 +84,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
               method: item.method || this._config.method || "Player.Open",
               open_mode: normalizeOpenMode(item.open_mode || this._config.open_mode || "partymode"),
               window: item.window || this._config.window || "videolibrary",
-              repeat_all:
-                typeof item.repeat_all === "boolean" ? item.repeat_all : !!this._config.repeat_all,
-              random_on:
-                typeof item.random_on === "boolean" ? item.random_on : !!this._config.random_on,
               params: item.params,
             };
           }.bind(this)
@@ -106,8 +98,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
         method: this._config.method || "Player.Open",
         open_mode: normalizeOpenMode(this._config.open_mode || "partymode"),
         window: this._config.window || "videolibrary",
-        repeat_all: !!this._config.repeat_all,
-        random_on: !!this._config.random_on,
         params: this._config.params,
       },
     ];
@@ -169,6 +159,10 @@ class KodiSmartPlaylistCard extends HTMLElement {
           <div class="status">Kodi: ${this._escape(state)}</div>
         </div>
         <div class="list">${rows}</div>
+        <div class="controls">
+          <button class="control-btn" data-action="toggle-repeat" ${disabled ? "disabled" : ""}>Repeat All Ein/Aus</button>
+          <button class="control-btn" data-action="toggle-shuffle" ${disabled ? "disabled" : ""}>Zufaellige Folge Ein/Aus</button>
+        </div>
         ${!hasEntity ? '<div class="hint">Bitte im Editor eine Kodi-Entity auswaehlen.</div>' : ""}
         ${!hasEntries ? '<div class="hint">Bitte mindestens eine Playlist konfigurieren.</div>' : ""}
         ${debugBlock}
@@ -215,6 +209,29 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
         .playlist-row:last-child { border-bottom: 0; }
         .playlist-row:disabled { cursor: not-allowed; opacity: 0.6; }
+
+        .controls {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          padding: 10px 16px;
+          border-top: 1px solid var(--divider-color);
+        }
+
+        .control-btn {
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          background: var(--card-background-color);
+          color: var(--primary-text-color);
+          padding: 10px 12px;
+          font: inherit;
+          cursor: pointer;
+        }
+
+        .control-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
+        }
 
         ha-icon {
           color: var(--primary-color);
@@ -282,6 +299,14 @@ class KodiSmartPlaylistCard extends HTMLElement {
       const button = buttons[i];
       button.addEventListener("click", () => this._handleTap(i));
     }
+    const toggleRepeatBtn = this.shadowRoot.querySelector("button[data-action='toggle-repeat']");
+    if (toggleRepeatBtn) {
+      toggleRepeatBtn.addEventListener("click", () => this._handleToggleRepeat());
+    }
+    const toggleShuffleBtn = this.shadowRoot.querySelector("button[data-action='toggle-shuffle']");
+    if (toggleShuffleBtn) {
+      toggleShuffleBtn.addEventListener("click", () => this._handleToggleShuffle());
+    }
   }
 
   async _handleTap(index) {
@@ -324,18 +349,11 @@ class KodiSmartPlaylistCard extends HTMLElement {
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
-      const warnings = [];
-      if (method === "Player.Open") {
-        await this._applyKodiPlayerOptions(config.entity, !!entry.repeat_all, !!entry.random_on, warnings);
-      }
       if (config.debug) {
-        const debugResponse = warnings.length > 0 ? { response: response, warnings: warnings } : response;
-        this._pushDebug(this._formatDebug("success", serviceData, debugResponse));
+        this._pushDebug(this._formatDebug("success", serviceData, response));
       }
 
-      const warningText =
-        warnings.length > 0 ? " (Hinweis: " + warnings.join("; ") + ")" : "";
-      this._showToast("Playlist gestartet: " + entry.name + warningText);
+      this._showToast("Playlist gestartet: " + entry.name);
       this._render();
     } catch (err) {
       const message = (err && err.message) || "Unbekannter Fehler";
@@ -399,56 +417,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return parts.join("\n");
   }
 
-  async _applyKodiPlayerOptions(entityId, setRepeatAll, setRandomOn, warnings) {
-    if (!setRepeatAll && !setRandomOn) {
-      return;
-    }
-    const activePlayersResponse = await this._hass.callService("kodi", "call_method", {
-      entity_id: entityId,
-      method: "Player.GetActivePlayers",
-    });
-    const activePlayers = this._extractActivePlayers(activePlayersResponse);
-    if (activePlayers.length === 0) {
-      warnings.push("kein aktiver Player fuer Repeat/Random gefunden");
-      return;
-    }
-    const playerId = activePlayers[0].playerid;
-    if (setRepeatAll) {
-      await this._callOptionalKodiMethod(
-        entityId,
-        "Player.SetRepeat",
-        { playerid: playerId, repeat: "all" },
-        warnings,
-        "Player.SetRepeat"
-      );
-    }
-    if (setRandomOn) {
-      await this._callOptionalKodiMethod(
-        entityId,
-        "Player.SetShuffle",
-        { playerid: playerId, shuffle: true },
-        warnings,
-        "Player.SetShuffle"
-      );
-    }
-  }
-
-  async _callOptionalKodiMethod(entityId, method, params, warnings, label) {
-    try {
-      await this._hass.callService("kodi", "call_method", {
-        entity_id: entityId,
-        method: method,
-        ...params,
-      });
-    } catch (err) {
-      if (this._isUnsupportedKodiMethodError(err, method)) {
-        warnings.push((label || method) + " nicht unterstuetzt");
-        return;
-      }
-      throw err;
-    }
-  }
-
   _extractActivePlayers(response) {
     if (Array.isArray(response)) {
       return response;
@@ -462,14 +430,112 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return [];
   }
 
-  _isUnsupportedKodiMethodError(err, method) {
-    const message = String((err && err.message) || "").toLowerCase();
-    return (
-      message.indexOf("method not found") !== -1 ||
-      message.indexOf("invalid params") !== -1 ||
-      message.indexOf("does not support") !== -1 ||
-      message.indexOf(String(method || "").toLowerCase()) !== -1
-    );
+  async _getActivePlayerId(entityId) {
+    const activePlayersResponse = await this._hass.callService("kodi", "call_method", {
+      entity_id: entityId,
+      method: "Player.GetActivePlayers",
+    });
+    const activePlayers = this._extractActivePlayers(activePlayersResponse);
+    if (!activePlayers || activePlayers.length === 0) {
+      return null;
+    }
+    return typeof activePlayers[0].playerid === "number" ? activePlayers[0].playerid : null;
+  }
+
+  async _getPlayerProperties(entityId, playerId) {
+    return this._hass.callService("kodi", "call_method", {
+      entity_id: entityId,
+      method: "Player.GetProperties",
+      playerid: playerId,
+      properties: ["repeat", "shuffled"],
+    });
+  }
+
+  _extractProperties(response) {
+    if (response && response.result && typeof response.result === "object") {
+      return response.result;
+    }
+    if (response && response.result && response.result.result && typeof response.result.result === "object") {
+      return response.result.result;
+    }
+    if (response && typeof response === "object") {
+      return response;
+    }
+    return {};
+  }
+
+  async _handleToggleRepeat() {
+    const config = this._config;
+    if (!this._hass || !config || !config.entity) {
+      return;
+    }
+    try {
+      const playerId = await this._getActivePlayerId(config.entity);
+      if (playerId === null) {
+        this._showToast("Kein aktiver Player fuer Repeat gefunden.");
+        return;
+      }
+      const propertiesResponse = await this._getPlayerProperties(config.entity, playerId);
+      const properties = this._extractProperties(propertiesResponse);
+      const current = properties && properties.repeat ? String(properties.repeat).toLowerCase() : "off";
+      const next = current === "all" ? "off" : "all";
+      const request = {
+        entity_id: config.entity,
+        method: "Player.SetRepeat",
+        playerid: playerId,
+        repeat: next,
+      };
+      const response = await this._hass.callService("kodi", "call_method", request);
+      if (config.debug) {
+        this._pushDebug(this._formatDebug("success", request, response));
+      }
+      this._showToast("Repeat: " + (next === "all" ? "Ein" : "Aus"));
+      this._render();
+    } catch (err) {
+      const message = (err && err.message) || "Unbekannter Fehler";
+      if (config.debug) {
+        this._pushDebug(this._formatDebug("error", { method: "Player.SetRepeat" }, null, err));
+      }
+      this._showToast("Fehler Repeat: " + message);
+      this._render();
+    }
+  }
+
+  async _handleToggleShuffle() {
+    const config = this._config;
+    if (!this._hass || !config || !config.entity) {
+      return;
+    }
+    try {
+      const playerId = await this._getActivePlayerId(config.entity);
+      if (playerId === null) {
+        this._showToast("Kein aktiver Player fuer Shuffle gefunden.");
+        return;
+      }
+      const propertiesResponse = await this._getPlayerProperties(config.entity, playerId);
+      const properties = this._extractProperties(propertiesResponse);
+      const current = !!(properties && properties.shuffled);
+      const next = !current;
+      const request = {
+        entity_id: config.entity,
+        method: "Player.SetShuffle",
+        playerid: playerId,
+        shuffle: next,
+      };
+      const response = await this._hass.callService("kodi", "call_method", request);
+      if (config.debug) {
+        this._pushDebug(this._formatDebug("success", request, response));
+      }
+      this._showToast("Shuffle: " + (next ? "Ein" : "Aus"));
+      this._render();
+    } catch (err) {
+      const message = (err && err.message) || "Unbekannter Fehler";
+      if (config.debug) {
+        this._pushDebug(this._formatDebug("error", { method: "Player.SetShuffle" }, null, err));
+      }
+      this._showToast("Fehler Shuffle: " + message);
+      this._render();
+    }
   }
 
   _toJsonString(value) {
@@ -507,8 +573,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
-      repeat_all: false,
-      random_on: false,
       debug: false,
       entity: "",
       ...config,
@@ -522,8 +586,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
             icon: this._config.icon || "mdi:playlist-play",
             open_mode: this._config.open_mode || "partymode",
             window: this._config.window || "videolibrary",
-            repeat_all: !!this._config.repeat_all,
-            random_on: !!this._config.random_on,
             playlist: this._config.playlist,
           },
         ];
@@ -534,8 +596,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
             icon: this._config.icon || "mdi:playlist-play",
             open_mode: this._config.open_mode || "partymode",
             window: this._config.window || "videolibrary",
-            repeat_all: !!this._config.repeat_all,
-            random_on: !!this._config.random_on,
             playlist: "",
           },
         ];
@@ -565,9 +625,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     if (field === "debug") {
       normalizedValue = value === "true";
     }
-    if (field === "repeat_all" || field === "random_on") {
-      normalizedValue = value === "true";
-    }
     if (field === "open_mode") {
       normalizedValue = normalizeOpenMode(value);
     }
@@ -587,10 +644,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     }
 
     playlists[index][field] = value;
-    if (field === "repeat_all" || field === "random_on") {
-      playlists[index][field] = value === "true";
-    }
-
     const next = {
       ...this._config,
       playlists: playlists,
@@ -608,8 +661,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         icon: this._config.icon || "mdi:playlist-play",
         open_mode: this._config.open_mode || "partymode",
         window: this._config.window || "videolibrary",
-        repeat_all: !!this._config.repeat_all,
-        random_on: !!this._config.random_on,
         playlist: "",
       },
     ]);
@@ -635,8 +686,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         icon: this._config.icon || "mdi:playlist-play",
         open_mode: this._config.open_mode || "partymode",
         window: this._config.window || "videolibrary",
-        repeat_all: !!this._config.repeat_all,
-        random_on: !!this._config.random_on,
         playlist: "",
       });
     }
@@ -709,16 +758,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               <label>Open Mode</label>
               <select data-field="open_mode" data-index="${index}">
                 ${this._getOpenModeOptions(item.open_mode || this._config.open_mode || "partymode")}
-              </select>
-
-              <label>RepeatAll</label>
-              <select data-field="repeat_all" data-index="${index}">
-                ${this._getBooleanOptions(!!item.repeat_all)}
-              </select>
-
-              <label>RandomOn</label>
-              <select data-field="random_on" data-index="${index}">
-                ${this._getBooleanOptions(!!item.random_on)}
               </select>
 
               <label>Playlist-Pfad (.xsp)</label>
@@ -952,13 +991,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         }.bind(this)
       )
       .join("");
-  }
-
-  _getBooleanOptions(selectedValue) {
-    return `
-      <option value="false" ${selectedValue ? "" : "selected"}>Aus</option>
-      <option value="true" ${selectedValue ? "selected" : ""}>Ein</option>
-    `;
   }
 
   _getKodiEntities() {
