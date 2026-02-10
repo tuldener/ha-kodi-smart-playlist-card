@@ -7,11 +7,12 @@ Eine Lovelace-Kachel, die eine oder mehrere Kodi Smart Playlists (`.xsp`) per JS
 - Einzelne Playlist (`playlist`) oder mehrere Playlists (`playlists`) in einer Card
 - Nutzt Home Assistant Service `kodi.call_method`
 - Standardaufruf per `Player.Open` mit Playlist als `item.partymode`
-- Frei konfigurierbarer Name, Icon, JSON-RPC Methode und `window`
+- Frei konfigurierbarer Name und `window`
 - `open_mode` pro Playlist waehlt zwischen `partymode` und `file`
 - Optionale Schalter `repeat_all` und `random_on` (global oder pro Playlist)
 - Visueller Lovelace-Editor (GUI) zum Bearbeiten der Card-Konfiguration
 - `window`-Auswahl im Editor als Dropdown (`videolibrary`, `musiclibrary`, `videos`)
+- Icon-Auswahl pro Playlist im suchbaren Picker
 - Optionaler Debug-Modus mit Rueckmeldungsfeld in der Kachel (letzte 5 Aufrufe)
 
 ## Installation

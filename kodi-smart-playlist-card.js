@@ -73,7 +73,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
             return {
               name: item.name || item.playlist,
               playlist: item.playlist,
-              icon: item.icon || this._config.icon,
+              icon: item.icon || this._config.icon || "mdi:playlist-play",
               method: item.method || this._config.method || "Player.Open",
               open_mode: item.open_mode || this._config.open_mode || "partymode",
               window: item.window || this._config.window || "videolibrary",
@@ -91,7 +91,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       {
         name: this._config.name,
         playlist: this._config.playlist,
-        icon: this._config.icon,
+        icon: this._config.icon || "mdi:playlist-play",
         method: this._config.method || "Player.Open",
         open_mode: this._config.open_mode || "partymode",
         window: this._config.window || "videolibrary",
@@ -614,8 +614,8 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               <label>Name</label>
               <input data-field="name" data-index="${index}" type="text" value="${this._escapeAttr(item.name || "")}" />
 
-              <label>Icon (mdi:...)</label>
-              <input data-field="icon" data-index="${index}" type="text" value="${this._escapeAttr(item.icon || "")}" />
+              <label>Icon</label>
+              <ha-icon-picker data-field="icon" data-index="${index}" value="${this._escapeAttr(item.icon || "mdi:playlist-play")}"></ha-icon-picker>
 
               <label>Window</label>
               <select data-field="window" data-index="${index}">
@@ -655,9 +655,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
 
         <label>Kartenname</label>
         <input data-root="name" type="text" value="${this._escapeAttr(this._config.name || "")}" />
-
-        <label>Standard-Icon</label>
-        <ha-icon-picker data-root="icon" value="${this._escapeAttr(this._config.icon || "mdi:playlist-play")}"></ha-icon-picker>
 
         <label>Debug</label>
         <select data-root="debug">
@@ -774,21 +771,21 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         this._updateRootField(field, select.value);
       });
     }
-    const iconPickers = this.shadowRoot.querySelectorAll("ha-icon-picker[data-root]");
-    for (let i = 0; i < iconPickers.length; i += 1) {
-      const picker = iconPickers[i];
+    const playlistIconPickers = this.shadowRoot.querySelectorAll("ha-icon-picker[data-field='icon']");
+    for (let i = 0; i < playlistIconPickers.length; i += 1) {
+      const picker = playlistIconPickers[i];
       if (this._hass) {
         picker.hass = this._hass;
       }
       picker.addEventListener("value-changed", (event) => {
-        const field = picker.getAttribute("data-root");
+        const index = Number(picker.getAttribute("data-index"));
         const value =
           event &&
           event.detail &&
           typeof event.detail.value === "string"
             ? event.detail.value
             : "";
-        this._updateRootField(field, value);
+        this._updatePlaylistField(index, "icon", value);
       });
     }
 
