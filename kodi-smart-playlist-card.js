@@ -24,6 +24,14 @@ class KodiSmartPlaylistCard extends HTMLElement {
   }
 
   setConfig(config) {
+    const sanitizedConfig = { ...config };
+    delete sanitizedConfig.repeat_all;
+    delete sanitizedConfig.random_on;
+    if (Array.isArray(sanitizedConfig.playlists) && sanitizedConfig.playlists.length > 0) {
+      delete sanitizedConfig.open_mode;
+      delete sanitizedConfig.window;
+    }
+
     this._config = {
       name: "Kodi Playlist",
       icon: "mdi:playlist-play",
@@ -31,7 +39,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       open_mode: "partymode",
       window: "videolibrary",
       debug: false,
-      ...config,
+      ...sanitizedConfig,
     };
     if (!Array.isArray(this._debugHistory)) {
       this._debugHistory = [];
@@ -71,8 +79,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
               playlist: item.playlist,
               icon: item.icon || this._config.icon,
               method: item.method || this._config.method || "Player.Open",
-              open_mode: item.open_mode || this._config.open_mode || "partymode",
-              window: item.window || this._config.window || "videolibrary",
+              open_mode: item.open_mode || "partymode",
+              window: item.window || "videolibrary",
               params: item.params,
             };
           }.bind(this)
@@ -85,8 +93,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
         playlist: this._config.playlist,
         icon: this._config.icon,
         method: this._config.method || "Player.Open",
-        open_mode: this._config.open_mode || "partymode",
-        window: this._config.window || "videolibrary",
+        open_mode: "partymode",
+        window: "videolibrary",
         params: this._config.params,
       },
     ];
@@ -282,7 +290,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
     try {
       const method = entry.method || "Player.Open";
-      const windowName = entry.window || config.window || this._guessWindow(entry.playlist);
       serviceData = {
         entity_id: config.entity,
         method: method,
@@ -292,10 +299,10 @@ class KodiSmartPlaylistCard extends HTMLElement {
       if (entry.params && typeof entry.params === "object" && !Array.isArray(entry.params)) {
         Object.assign(serviceData, entry.params);
       } else if (method === "GUI.ActivateWindow") {
-        serviceData.window = windowName;
+        serviceData.window = entry.window || "videolibrary";
         serviceData.parameters = [entry.playlist];
       } else if (method === "Player.Open") {
-        const openMode = entry.open_mode || config.open_mode || "partymode";
+        const openMode = entry.open_mode || "partymode";
         if (openMode === "xbmc_builtin_party") {
           const commands = [
             "PlayMedia(" + entry.playlist + ")",
@@ -323,7 +330,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
         }
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       } else {
-        const openMode = entry.open_mode || config.open_mode || "partymode";
+        const openMode = entry.open_mode || "partymode";
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       }
 
