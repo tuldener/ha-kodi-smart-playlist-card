@@ -635,16 +635,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         <label>Kartenname</label>
         <input data-root="name" type="text" value="${this._escapeAttr(this._config.name || "")}" />
 
-        <label>Standard Open Mode</label>
-        <select data-root="open_mode">
-          ${this._getOpenModeOptions(this._config.open_mode || "partymode")}
-        </select>
-
-        <label>Standard Window</label>
-        <select data-root="window">
-          ${this._getWindowOptions(this._config.window || "videolibrary")}
-        </select>
-
         <label>Debug</label>
         <select data-root="debug">
           <option value="false" ${this._config.debug ? "" : "selected"}>Aus</option>
