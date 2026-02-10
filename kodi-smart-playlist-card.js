@@ -383,6 +383,10 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return "videolibrary";
   }
 
+  _normalizeOpenMode(value) {
+    return normalizeOpenMode(value);
+  }
+
   _formatDebug(status, requestPayload, responsePayload, err) {
     const parts = [];
     parts.push("status: " + status);
@@ -861,6 +865,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         return `<option value="${this._escapeAttr(name)}" ${selected}>${this._escape(name)}</option>`;
       }.bind(this))
       .join("");
+  }
+
+  _normalizeOpenMode(value) {
+    return normalizeOpenMode(value);
   }
 
   _getOpenModeOptions(selectedMode) {
