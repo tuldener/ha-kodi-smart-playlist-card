@@ -455,6 +455,13 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         ];
       }
     }
+    this._config.playlists = (this._config.playlists || []).map((item) => ({
+      ...item,
+      open_mode: item.open_mode || this._config.open_mode || "partymode",
+      window: item.window || this._config.window || "videolibrary",
+    }));
+    delete this._config.repeat_all;
+    delete this._config.random_on;
 
     this._render();
   }
@@ -465,13 +472,32 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
   }
 
   _emitConfig(config) {
+    const normalized = this._normalizeConfigForSave(config);
     this.dispatchEvent(
       new CustomEvent("config-changed", {
-        detail: { config: config },
+        detail: { config: normalized },
         bubbles: true,
         composed: true,
       })
     );
+  }
+
+  _normalizeConfigForSave(config) {
+    const normalized = { ...config };
+    delete normalized.repeat_all;
+    delete normalized.random_on;
+
+    if (Array.isArray(normalized.playlists) && normalized.playlists.length > 0) {
+      normalized.playlists = normalized.playlists.map((item) => ({
+        ...item,
+        open_mode: item.open_mode || normalized.open_mode || "partymode",
+        window: item.window || normalized.window || "videolibrary",
+      }));
+      delete normalized.open_mode;
+      delete normalized.window;
+    }
+
+    return normalized;
   }
 
   _updateRootField(field, value) {
