@@ -67,8 +67,8 @@ playlists:
 - `window` wird nur fuer `GUI.ActivateWindow` benoetigt.
 - `open_mode: partymode` zeigt oft nur eine kleine, dynamische Queue.
 - `open_mode: file` laedt die komplette Smart Playlist.
-- `Repeat All Ein/Aus` nutzt Kodi JSON-RPC `Player.SetRepeat` mit `playerid: 0`.
-- `Zufaellige Folge Ein/Aus` nutzt Kodi JSON-RPC `Player.SetShuffle` mit `playerid: 0`.
+- `Repeat All Ein/Aus` nutzt Kodi JSON-RPC `Player.SetRepeat`.
+- `Zufaellige Folge Ein/Aus` nutzt Kodi JSON-RPC `Player.SetShuffle`.
 
 ## Entspricht folgendem JSON-RPC Muster
 

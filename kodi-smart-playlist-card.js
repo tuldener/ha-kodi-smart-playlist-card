@@ -474,7 +474,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       const request = {
         entity_id: config.entity,
         method: "Player.SetRepeat",
-        playerid: 0,
         repeat: repeatValue,
       };
       const response = await this._hass.callService("kodi", "call_method", request);
@@ -504,7 +503,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       const request = {
         entity_id: config.entity,
         method: "Player.SetShuffle",
-        playerid: 0,
         shuffle: next,
       };
       const response = await this._hass.callService("kodi", "call_method", request);
