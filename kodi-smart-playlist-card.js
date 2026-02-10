@@ -599,8 +599,12 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               <label>Name</label>
               <input data-field="name" data-index="${index}" type="text" value="${this._escapeAttr(item.name || "")}" />
 
-              <label>Icon (mdi:...)</label>
-              <input data-field="icon" data-index="${index}" type="text" value="${this._escapeAttr(item.icon || "")}" />
+              <label>Icon</label>
+              <ha-icon-picker
+                data-field="icon"
+                data-index="${index}"
+                value="${this._escapeAttr(item.icon || this._config.icon || "mdi:playlist-play")}"
+              ></ha-icon-picker>
 
               <label>Window</label>
               <select data-field="window" data-index="${index}">
@@ -630,12 +634,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
 
         <label>Kartenname</label>
         <input data-root="name" type="text" value="${this._escapeAttr(this._config.name || "")}" />
-
-        <label>Standard-Icon (mdi:...)</label>
-        <input data-root="icon" type="text" value="${this._escapeAttr(this._config.icon || "")}" />
-
-        <label>JSON-RPC Methode</label>
-        <input data-root="method" type="text" value="${this._escapeAttr(this._config.method || "Player.Open")}" />
 
         <label>Standard Open Mode</label>
         <select data-root="open_mode">
@@ -725,6 +723,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           font: inherit;
         }
 
+        ha-icon-picker {
+          width: 100%;
+        }
+
         button {
           border: 1px solid var(--divider-color);
           background: var(--card-background-color);
@@ -766,6 +768,23 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         const field = input.getAttribute("data-field");
         const index = Number(input.getAttribute("data-index"));
         this._updatePlaylistField(index, field, input.value);
+      });
+    }
+    const playlistIconPickers = this.shadowRoot.querySelectorAll("ha-icon-picker[data-field='icon']");
+    for (let i = 0; i < playlistIconPickers.length; i += 1) {
+      const picker = playlistIconPickers[i];
+      if (this._hass) {
+        picker.hass = this._hass;
+      }
+      picker.addEventListener("value-changed", (event) => {
+        const index = Number(picker.getAttribute("data-index"));
+        const value =
+          event &&
+          event.detail &&
+          typeof event.detail.value === "string"
+            ? event.detail.value
+            : "";
+        this._updatePlaylistField(index, "icon", value);
       });
     }
     const playlistSelects = this.shadowRoot.querySelectorAll("select[data-field]");
