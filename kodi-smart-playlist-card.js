@@ -47,6 +47,12 @@ class KodiSmartPlaylistCard extends HTMLElement {
     if (!Array.isArray(this._debugHistory)) {
       this._debugHistory = [];
     }
+    if (typeof this._repeatEnabled !== "boolean") {
+      this._repeatEnabled = false;
+    }
+    if (typeof this._shuffleEnabled !== "boolean") {
+      this._shuffleEnabled = false;
+    }
 
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
@@ -160,8 +166,24 @@ class KodiSmartPlaylistCard extends HTMLElement {
         </div>
         <div class="list">${rows}</div>
         <div class="controls">
-          <button class="control-btn" data-action="toggle-repeat" ${disabled ? "disabled" : ""}>Repeat All Ein/Aus</button>
-          <button class="control-btn" data-action="toggle-shuffle" ${disabled ? "disabled" : ""}>Zufaellige Folge Ein/Aus</button>
+          <button
+            class="control-btn ${this._repeatEnabled ? "active" : ""}"
+            data-action="toggle-repeat"
+            title="Repeat All Ein/Aus"
+            aria-label="Repeat All Ein/Aus"
+            ${disabled ? "disabled" : ""}
+          >
+            <ha-icon icon="${this._repeatEnabled ? "mdi:repeat" : "mdi:repeat-off"}"></ha-icon>
+          </button>
+          <button
+            class="control-btn ${this._shuffleEnabled ? "active" : ""}"
+            data-action="toggle-shuffle"
+            title="Zufaellige Folge Ein/Aus"
+            aria-label="Zufaellige Folge Ein/Aus"
+            ${disabled ? "disabled" : ""}
+          >
+            <ha-icon icon="${this._shuffleEnabled ? "mdi:shuffle" : "mdi:shuffle-disabled"}"></ha-icon>
+          </button>
         </div>
         ${!hasEntity ? '<div class="hint">Bitte im Editor eine Kodi-Entity auswaehlen.</div>' : ""}
         ${!hasEntries ? '<div class="hint">Bitte mindestens eine Playlist konfigurieren.</div>' : ""}
@@ -226,11 +248,19 @@ class KodiSmartPlaylistCard extends HTMLElement {
           padding: 10px 12px;
           font: inherit;
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .control-btn:disabled {
           cursor: not-allowed;
           opacity: 0.6;
+        }
+
+        .control-btn.active {
+          border-color: var(--primary-color);
+          color: var(--primary-color);
         }
 
         ha-icon {
@@ -430,62 +460,21 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return [];
   }
 
-  async _getActivePlayerId(entityId) {
-    const activePlayersResponse = await this._hass.callService("kodi", "call_method", {
-      entity_id: entityId,
-      method: "Player.GetActivePlayers",
-    });
-    const activePlayers = this._extractActivePlayers(activePlayersResponse);
-    if (!activePlayers || activePlayers.length === 0) {
-      return null;
-    }
-    return typeof activePlayers[0].playerid === "number" ? activePlayers[0].playerid : null;
-  }
-
-  async _getPlayerProperties(entityId, playerId) {
-    return this._hass.callService("kodi", "call_method", {
-      entity_id: entityId,
-      method: "Player.GetProperties",
-      playerid: playerId,
-      properties: ["repeat", "shuffled"],
-    });
-  }
-
-  _extractProperties(response) {
-    if (response && response.result && typeof response.result === "object") {
-      return response.result;
-    }
-    if (response && response.result && response.result.result && typeof response.result.result === "object") {
-      return response.result.result;
-    }
-    if (response && typeof response === "object") {
-      return response;
-    }
-    return {};
-  }
-
   async _handleToggleRepeat() {
     const config = this._config;
     if (!this._hass || !config || !config.entity) {
       return;
     }
     try {
-      const playerId = await this._getActivePlayerId(config.entity);
-      if (playerId === null) {
-        this._showToast("Kein aktiver Player fuer Repeat gefunden.");
-        return;
-      }
-      const propertiesResponse = await this._getPlayerProperties(config.entity, playerId);
-      const properties = this._extractProperties(propertiesResponse);
-      const current = properties && properties.repeat ? String(properties.repeat).toLowerCase() : "off";
-      const next = current === "all" ? "off" : "all";
+      const next = !this._repeatEnabled;
       const request = {
         entity_id: config.entity,
         method: "Player.SetRepeat",
-        playerid: playerId,
+        playerid: 0,
         repeat: next,
       };
       const response = await this._hass.callService("kodi", "call_method", request);
+      this._repeatEnabled = next;
       if (config.debug) {
         this._pushDebug(this._formatDebug("success", request, response));
       }
@@ -507,22 +496,15 @@ class KodiSmartPlaylistCard extends HTMLElement {
       return;
     }
     try {
-      const playerId = await this._getActivePlayerId(config.entity);
-      if (playerId === null) {
-        this._showToast("Kein aktiver Player fuer Shuffle gefunden.");
-        return;
-      }
-      const propertiesResponse = await this._getPlayerProperties(config.entity, playerId);
-      const properties = this._extractProperties(propertiesResponse);
-      const current = !!(properties && properties.shuffled);
-      const next = !current;
+      const next = !this._shuffleEnabled;
       const request = {
         entity_id: config.entity,
         method: "Player.SetShuffle",
-        playerid: playerId,
+        playerid: 0,
         shuffle: next,
       };
       const response = await this._hass.callService("kodi", "call_method", request);
+      this._shuffleEnabled = next;
       if (config.debug) {
         this._pushDebug(this._formatDebug("success", request, response));
       }
