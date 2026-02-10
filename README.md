@@ -7,12 +7,10 @@ Eine Lovelace-Kachel, die eine oder mehrere Kodi Smart Playlists (`.xsp`) per JS
 - Einzelne Playlist (`playlist`) oder mehrere Playlists (`playlists`) in einer Card
 - Nutzt Home Assistant Service `kodi.call_method`
 - Standardaufruf per `Player.Open` mit Playlist als `item.partymode`
-- Frei konfigurierbarer Name und `window`
-- `open_mode` pro Playlist waehlt zwischen `partymode` und `file`
-- Optionale Schalter `repeat_all` und `random_on` (global oder pro Playlist)
+- Frei konfigurierbarer Name, Icon, JSON-RPC Methode und `window`
+- `open_mode` pro Playlist waehlt zwischen `partymode`, `file` und `xbmc_builtin_party`
 - Visueller Lovelace-Editor (GUI) zum Bearbeiten der Card-Konfiguration
 - `window`-Auswahl im Editor als Dropdown (`videolibrary`, `musiclibrary`, `videos`)
-- Icon-Auswahl pro Playlist im suchbaren Picker
 - Optionaler Debug-Modus mit Rueckmeldungsfeld in der Kachel (letzte 5 Aufrufe)
 
 ## Installation
@@ -32,8 +30,6 @@ entity: media_player.kodi_wohnzimmer
 playlist: special://profile/playlists/video/Filme.xsp
 method: Player.Open
 open_mode: file
-repeat_all: true
-random_on: true
 ```
 
 ## Beispiel 2: Mehrere Playlists in einer Card
@@ -50,8 +46,6 @@ playlists:
     playlist: special://profile/playlists/video/Filme.xsp
   - name: Serien
     icon: mdi:television-play
-    repeat_all: true
-    random_on: true
     window: videolibrary
     playlist: special://profile/playlists/video/Serien.xsp
   - name: Musik Favoriten
@@ -71,8 +65,10 @@ playlists:
 - `window` wird nur fuer `GUI.ActivateWindow` benoetigt.
 - `open_mode: partymode` zeigt oft nur eine kleine, dynamische Queue.
 - `open_mode: file` laedt die komplette Smart Playlist.
-- `repeat_all: true` setzt nach dem Start `repeat=all` ueber Kodi JSON-RPC (`Player.SetRepeat`).
-- `random_on: true` setzt nach dem Start `shuffle=true` ueber Kodi JSON-RPC (`Player.SetShuffle`).
+- `open_mode: xbmc_builtin_party` fuehrt `XBMC.ExecuteBuiltin` aus:
+  - `PlayMedia(<playlist>)`
+  - `PlayerControl(RepeatAll)`
+  - `PlayerControl(RandomOn)`
 
 ## Entspricht folgendem JSON-RPC Muster
 

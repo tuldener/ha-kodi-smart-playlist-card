@@ -1,14 +1,3 @@
-function normalizeOpenMode(value) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (raw === "file") {
-    return "file";
-  }
-  if (raw.indexOf("file") !== -1) {
-    return "file";
-  }
-  return "partymode";
-}
-
 class KodiSmartPlaylistCard extends HTMLElement {
   static getConfigElement() {
     return document.createElement("kodi-smart-playlist-card-editor");
@@ -22,8 +11,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
-      repeat_all: false,
-      random_on: false,
       debug: false,
       entity: "",
       playlists: [
@@ -43,8 +30,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
-      repeat_all: false,
-      random_on: false,
       debug: false,
       ...config,
     };
@@ -84,14 +69,10 @@ class KodiSmartPlaylistCard extends HTMLElement {
             return {
               name: item.name || item.playlist,
               playlist: item.playlist,
-              icon: item.icon || this._config.icon || "mdi:playlist-play",
+              icon: item.icon || this._config.icon,
               method: item.method || this._config.method || "Player.Open",
-              open_mode: normalizeOpenMode(item.open_mode || this._config.open_mode || "partymode"),
+              open_mode: item.open_mode || this._config.open_mode || "partymode",
               window: item.window || this._config.window || "videolibrary",
-              repeat_all:
-                typeof item.repeat_all === "boolean" ? item.repeat_all : !!this._config.repeat_all,
-              random_on:
-                typeof item.random_on === "boolean" ? item.random_on : !!this._config.random_on,
               params: item.params,
             };
           }.bind(this)
@@ -102,12 +83,10 @@ class KodiSmartPlaylistCard extends HTMLElement {
       {
         name: this._config.name,
         playlist: this._config.playlist,
-        icon: this._config.icon || "mdi:playlist-play",
+        icon: this._config.icon,
         method: this._config.method || "Player.Open",
-        open_mode: normalizeOpenMode(this._config.open_mode || "partymode"),
+        open_mode: this._config.open_mode || "partymode",
         window: this._config.window || "videolibrary",
-        repeat_all: !!this._config.repeat_all,
-        random_on: !!this._config.random_on,
         params: this._config.params,
       },
     ];
@@ -316,26 +295,44 @@ class KodiSmartPlaylistCard extends HTMLElement {
         serviceData.window = windowName;
         serviceData.parameters = [entry.playlist];
       } else if (method === "Player.Open") {
-        const openMode = normalizeOpenMode(entry.open_mode || config.open_mode || "partymode");
+        const openMode = entry.open_mode || config.open_mode || "partymode";
+        if (openMode === "xbmc_builtin_party") {
+          const commands = [
+            "PlayMedia(" + entry.playlist + ")",
+            "PlayerControl(RepeatAll)",
+            "PlayerControl(RandomOn)",
+          ];
+          const responses = [];
+          for (let i = 0; i < commands.length; i += 1) {
+            const builtInServiceData = {
+              entity_id: config.entity,
+              method: "XBMC.ExecuteBuiltin",
+              command: commands[i],
+            };
+            const stepResponse = await this._hass.callService("kodi", "call_method", builtInServiceData);
+            responses.push({ command: commands[i], response: stepResponse });
+          }
+          if (config.debug) {
+            this._pushDebug(
+              this._formatDebug("success", { mode: "xbmc_builtin_party", commands: commands }, responses)
+            );
+          }
+          this._showToast("Playlist gestartet (XBMC Builtin): " + entry.name);
+          this._render();
+          return;
+        }
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       } else {
-        const openMode = normalizeOpenMode(entry.open_mode || config.open_mode || "partymode");
+        const openMode = entry.open_mode || config.open_mode || "partymode";
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
-      const warnings = [];
-      if (method === "Player.Open") {
-        await this._applyKodiPlayerOptions(config.entity, !!entry.repeat_all, !!entry.random_on, warnings);
-      }
       if (config.debug) {
-        const debugResponse = warnings.length > 0 ? { response: response, warnings: warnings } : response;
-        this._pushDebug(this._formatDebug("success", serviceData, debugResponse));
+        this._pushDebug(this._formatDebug("success", serviceData, response));
       }
 
-      const warningText =
-        warnings.length > 0 ? " (Hinweis: " + warnings.join("; ") + ")" : "";
-      this._showToast("Playlist gestartet: " + entry.name + warningText);
+      this._showToast("Playlist gestartet: " + entry.name);
       this._render();
     } catch (err) {
       const message = (err && err.message) || "Unbekannter Fehler";
@@ -376,10 +373,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return "videolibrary";
   }
 
-  _normalizeOpenMode(value) {
-    return normalizeOpenMode(value);
-  }
-
   _formatDebug(status, requestPayload, responsePayload, err) {
     const parts = [];
     parts.push("status: " + status);
@@ -397,79 +390,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       parts.push((err && err.message) || String(err));
     }
     return parts.join("\n");
-  }
-
-  async _applyKodiPlayerOptions(entityId, setRepeatAll, setRandomOn, warnings) {
-    if (!setRepeatAll && !setRandomOn) {
-      return;
-    }
-    const activePlayersResponse = await this._hass.callService("kodi", "call_method", {
-      entity_id: entityId,
-      method: "Player.GetActivePlayers",
-    });
-    const activePlayers = this._extractActivePlayers(activePlayersResponse);
-    if (activePlayers.length === 0) {
-      warnings.push("kein aktiver Player fuer Repeat/Random gefunden");
-      return;
-    }
-    const playerId = activePlayers[0].playerid;
-    if (setRepeatAll) {
-      await this._callOptionalKodiMethod(
-        entityId,
-        "Player.SetRepeat",
-        { playerid: playerId, repeat: "all" },
-        warnings,
-        "Player.SetRepeat"
-      );
-    }
-    if (setRandomOn) {
-      await this._callOptionalKodiMethod(
-        entityId,
-        "Player.SetShuffle",
-        { playerid: playerId, shuffle: true },
-        warnings,
-        "Player.SetShuffle"
-      );
-    }
-  }
-
-  async _callOptionalKodiMethod(entityId, method, params, warnings, label) {
-    try {
-      await this._hass.callService("kodi", "call_method", {
-        entity_id: entityId,
-        method: method,
-        ...params,
-      });
-    } catch (err) {
-      if (this._isUnsupportedKodiMethodError(err, method)) {
-        warnings.push((label || method) + " nicht unterstuetzt");
-        return;
-      }
-      throw err;
-    }
-  }
-
-  _extractActivePlayers(response) {
-    if (Array.isArray(response)) {
-      return response;
-    }
-    if (response && Array.isArray(response.result)) {
-      return response.result;
-    }
-    if (response && response.result && Array.isArray(response.result.result)) {
-      return response.result.result;
-    }
-    return [];
-  }
-
-  _isUnsupportedKodiMethodError(err, method) {
-    const message = String((err && err.message) || "").toLowerCase();
-    return (
-      message.indexOf("method not found") !== -1 ||
-      message.indexOf("invalid params") !== -1 ||
-      message.indexOf("does not support") !== -1 ||
-      message.indexOf(String(method || "").toLowerCase()) !== -1
-    );
   }
 
   _toJsonString(value) {
@@ -507,8 +427,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
-      repeat_all: false,
-      random_on: false,
       debug: false,
       entity: "",
       ...config,
@@ -522,8 +440,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
             icon: this._config.icon || "mdi:playlist-play",
             open_mode: this._config.open_mode || "partymode",
             window: this._config.window || "videolibrary",
-            repeat_all: !!this._config.repeat_all,
-            random_on: !!this._config.random_on,
             playlist: this._config.playlist,
           },
         ];
@@ -534,8 +450,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
             icon: this._config.icon || "mdi:playlist-play",
             open_mode: this._config.open_mode || "partymode",
             window: this._config.window || "videolibrary",
-            repeat_all: !!this._config.repeat_all,
-            random_on: !!this._config.random_on,
             playlist: "",
           },
         ];
@@ -565,12 +479,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     if (field === "debug") {
       normalizedValue = value === "true";
     }
-    if (field === "repeat_all" || field === "random_on") {
-      normalizedValue = value === "true";
-    }
-    if (field === "open_mode") {
-      normalizedValue = normalizeOpenMode(value);
-    }
     const next = { ...this._config, [field]: normalizedValue };
     delete next.playlist;
     this._config = next;
@@ -587,9 +495,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     }
 
     playlists[index][field] = value;
-    if (field === "repeat_all" || field === "random_on") {
-      playlists[index][field] = value === "true";
-    }
 
     const next = {
       ...this._config,
@@ -608,8 +513,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         icon: this._config.icon || "mdi:playlist-play",
         open_mode: this._config.open_mode || "partymode",
         window: this._config.window || "videolibrary",
-        repeat_all: !!this._config.repeat_all,
-        random_on: !!this._config.random_on,
         playlist: "",
       },
     ]);
@@ -635,8 +538,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         icon: this._config.icon || "mdi:playlist-play",
         open_mode: this._config.open_mode || "partymode",
         window: this._config.window || "videolibrary",
-        repeat_all: !!this._config.repeat_all,
-        random_on: !!this._config.random_on,
         playlist: "",
       });
     }
@@ -698,8 +599,8 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               <label>Name</label>
               <input data-field="name" data-index="${index}" type="text" value="${this._escapeAttr(item.name || "")}" />
 
-              <label>Icon</label>
-              <ha-icon-picker data-field="icon" data-index="${index}" value="${this._escapeAttr(item.icon || "mdi:playlist-play")}"></ha-icon-picker>
+              <label>Icon (mdi:...)</label>
+              <input data-field="icon" data-index="${index}" type="text" value="${this._escapeAttr(item.icon || "")}" />
 
               <label>Window</label>
               <select data-field="window" data-index="${index}">
@@ -709,16 +610,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               <label>Open Mode</label>
               <select data-field="open_mode" data-index="${index}">
                 ${this._getOpenModeOptions(item.open_mode || this._config.open_mode || "partymode")}
-              </select>
-
-              <label>RepeatAll</label>
-              <select data-field="repeat_all" data-index="${index}">
-                ${this._getBooleanOptions(!!item.repeat_all)}
-              </select>
-
-              <label>RandomOn</label>
-              <select data-field="random_on" data-index="${index}">
-                ${this._getBooleanOptions(!!item.random_on)}
               </select>
 
               <label>Playlist-Pfad (.xsp)</label>
@@ -739,6 +630,22 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
 
         <label>Kartenname</label>
         <input data-root="name" type="text" value="${this._escapeAttr(this._config.name || "")}" />
+
+        <label>Standard-Icon (mdi:...)</label>
+        <input data-root="icon" type="text" value="${this._escapeAttr(this._config.icon || "")}" />
+
+        <label>JSON-RPC Methode</label>
+        <input data-root="method" type="text" value="${this._escapeAttr(this._config.method || "Player.Open")}" />
+
+        <label>Standard Open Mode</label>
+        <select data-root="open_mode">
+          ${this._getOpenModeOptions(this._config.open_mode || "partymode")}
+        </select>
+
+        <label>Standard Window</label>
+        <select data-root="window">
+          ${this._getWindowOptions(this._config.window || "videolibrary")}
+        </select>
 
         <label>Debug</label>
         <select data-root="debug">
@@ -818,10 +725,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           font: inherit;
         }
 
-        ha-icon-picker {
-          width: 100%;
-        }
-
         button {
           border: 1px solid var(--divider-color);
           background: var(--card-background-color);
@@ -853,23 +756,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       select.addEventListener("change", () => {
         const field = select.getAttribute("data-root");
         this._updateRootField(field, select.value);
-      });
-    }
-    const playlistIconPickers = this.shadowRoot.querySelectorAll("ha-icon-picker[data-field='icon']");
-    for (let i = 0; i < playlistIconPickers.length; i += 1) {
-      const picker = playlistIconPickers[i];
-      if (this._hass) {
-        picker.hass = this._hass;
-      }
-      picker.addEventListener("value-changed", (event) => {
-        const index = Number(picker.getAttribute("data-index"));
-        const value =
-          event &&
-          event.detail &&
-          typeof event.detail.value === "string"
-            ? event.detail.value
-            : "";
-        this._updatePlaylistField(index, "icon", value);
       });
     }
 
@@ -933,32 +819,23 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       .join("");
   }
 
-  _normalizeOpenMode(value) {
-    return normalizeOpenMode(value);
-  }
-
   _getOpenModeOptions(selectedMode) {
-    const normalizedSelected = normalizeOpenMode(selectedMode || "partymode");
-    const options = ["partymode", "file"];
+    const modes = ["partymode", "file", "xbmc_builtin_party"];
+    const options = modes.indexOf(selectedMode) === -1 ? [selectedMode].concat(modes) : modes;
     return options
       .map(
         function (mode) {
-          const selected = mode === normalizedSelected ? "selected" : "";
+          const selected = mode === selectedMode ? "selected" : "";
           const label =
             mode === "file"
               ? "file (komplette Playlist)"
-              : "partymode (dynamisch)";
+              : mode === "xbmc_builtin_party"
+                ? "xbmc_builtin_party (PlayMedia + Repeat + Random)"
+                : "partymode (dynamisch)";
           return `<option value="${this._escapeAttr(mode)}" ${selected}>${this._escape(label)}</option>`;
         }.bind(this)
       )
       .join("");
-  }
-
-  _getBooleanOptions(selectedValue) {
-    return `
-      <option value="false" ${selectedValue ? "" : "selected"}>Aus</option>
-      <option value="true" ${selectedValue ? "selected" : ""}>Ein</option>
-    `;
   }
 
   _getKodiEntities() {
