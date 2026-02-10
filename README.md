@@ -71,8 +71,8 @@ playlists:
 - `window` wird nur fuer `GUI.ActivateWindow` benoetigt.
 - `open_mode: partymode` zeigt oft nur eine kleine, dynamische Queue.
 - `open_mode: file` laedt die komplette Smart Playlist.
-- `repeat_all: true` setzt nach dem Start `repeat=all` ueber `media_player.repeat_set`.
-- `random_on: true` setzt nach dem Start `shuffle=true` ueber `media_player.shuffle_set`.
+- `repeat_all: true` setzt nach dem Start `repeat=all` ueber Kodi JSON-RPC (`Player.SetRepeat`).
+- `random_on: true` setzt nach dem Start `shuffle=true` ueber Kodi JSON-RPC (`Player.SetShuffle`).
 
 ## Entspricht folgendem JSON-RPC Muster
 

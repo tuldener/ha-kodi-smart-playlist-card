@@ -326,22 +326,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       const response = await this._hass.callService("kodi", "call_method", serviceData);
       const warnings = [];
       if (method === "Player.Open") {
-        if (entry.repeat_all) {
-          await this._callOptionalMediaService(
-            "repeat_set",
-            config.entity,
-            { repeat: "all" },
-            warnings
-          );
-        }
-        if (entry.random_on) {
-          await this._callOptionalMediaService(
-            "shuffle_set",
-            config.entity,
-            { shuffle: true },
-            warnings
-          );
-        }
+        await this._applyKodiPlayerOptions(config.entity, !!entry.repeat_all, !!entry.random_on, warnings);
       }
       if (config.debug) {
         const debugResponse = warnings.length > 0 ? { response: response, warnings: warnings } : response;
@@ -414,26 +399,76 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return parts.join("\n");
   }
 
-  async _callOptionalMediaService(action, entityId, payload, warnings) {
+  async _applyKodiPlayerOptions(entityId, setRepeatAll, setRandomOn, warnings) {
+    if (!setRepeatAll && !setRandomOn) {
+      return;
+    }
+    const activePlayersResponse = await this._hass.callService("kodi", "call_method", {
+      entity_id: entityId,
+      method: "Player.GetActivePlayers",
+    });
+    const activePlayers = this._extractActivePlayers(activePlayersResponse);
+    if (activePlayers.length === 0) {
+      warnings.push("kein aktiver Player fuer Repeat/Random gefunden");
+      return;
+    }
+    const playerId = activePlayers[0].playerid;
+    if (setRepeatAll) {
+      await this._callOptionalKodiMethod(
+        entityId,
+        "Player.SetRepeat",
+        { playerid: playerId, repeat: "all" },
+        warnings,
+        "Player.SetRepeat"
+      );
+    }
+    if (setRandomOn) {
+      await this._callOptionalKodiMethod(
+        entityId,
+        "Player.SetShuffle",
+        { playerid: playerId, shuffle: true },
+        warnings,
+        "Player.SetShuffle"
+      );
+    }
+  }
+
+  async _callOptionalKodiMethod(entityId, method, params, warnings, label) {
     try {
-      await this._hass.callService("media_player", action, {
+      await this._hass.callService("kodi", "call_method", {
         entity_id: entityId,
-        ...payload,
+        method: method,
+        ...params,
       });
     } catch (err) {
-      if (this._isUnsupportedMediaActionError(err, action)) {
-        warnings.push(action + " nicht unterstuetzt");
+      if (this._isUnsupportedKodiMethodError(err, method)) {
+        warnings.push((label || method) + " nicht unterstuetzt");
         return;
       }
       throw err;
     }
   }
 
-  _isUnsupportedMediaActionError(err, action) {
+  _extractActivePlayers(response) {
+    if (Array.isArray(response)) {
+      return response;
+    }
+    if (response && Array.isArray(response.result)) {
+      return response.result;
+    }
+    if (response && response.result && Array.isArray(response.result.result)) {
+      return response.result.result;
+    }
+    return [];
+  }
+
+  _isUnsupportedKodiMethodError(err, method) {
     const message = String((err && err.message) || "").toLowerCase();
     return (
-      message.indexOf("does not support action media_player." + action) !== -1 ||
-      message.indexOf("does not support action") !== -1
+      message.indexOf("method not found") !== -1 ||
+      message.indexOf("invalid params") !== -1 ||
+      message.indexOf("does not support") !== -1 ||
+      message.indexOf(String(method || "").toLowerCase()) !== -1
     );
   }
 
