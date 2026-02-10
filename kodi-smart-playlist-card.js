@@ -242,10 +242,12 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
         .control-btn {
           border: 1px solid var(--divider-color);
-          border-radius: 8px;
+          border-radius: 999px;
           background: var(--card-background-color);
           color: var(--primary-text-color);
-          padding: 10px 12px;
+          width: 44px;
+          height: 44px;
+          padding: 0;
           font: inherit;
           cursor: pointer;
           display: flex;
@@ -261,6 +263,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
         .control-btn.active {
           border-color: var(--primary-color);
           color: var(--primary-color);
+          background: color-mix(in srgb, var(--primary-color) 12%, transparent);
         }
 
         ha-icon {
@@ -467,18 +470,19 @@ class KodiSmartPlaylistCard extends HTMLElement {
     }
     try {
       const next = !this._repeatEnabled;
+      const repeatValue = next ? "all" : "off";
       const request = {
         entity_id: config.entity,
         method: "Player.SetRepeat",
         playerid: 0,
-        repeat: next,
+        repeat: repeatValue,
       };
       const response = await this._hass.callService("kodi", "call_method", request);
       this._repeatEnabled = next;
       if (config.debug) {
         this._pushDebug(this._formatDebug("success", request, response));
       }
-      this._showToast("Repeat: " + (next === "all" ? "Ein" : "Aus"));
+      this._showToast("Repeat: " + (next ? "Ein" : "Aus"));
       this._render();
     } catch (err) {
       const message = (err && err.message) || "Unbekannter Fehler";
