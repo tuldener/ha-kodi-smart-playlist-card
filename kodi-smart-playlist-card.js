@@ -863,6 +863,17 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       .join("");
   }
 
+  _normalizeOpenMode(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (raw === "file") {
+      return "file";
+    }
+    if (raw.indexOf("file") !== -1) {
+      return "file";
+    }
+    return "partymode";
+  }
+
   _getOpenModeOptions(selectedMode) {
     const normalizedSelected = this._normalizeOpenMode(selectedMode || "partymode");
     const options = ["partymode", "file"];
