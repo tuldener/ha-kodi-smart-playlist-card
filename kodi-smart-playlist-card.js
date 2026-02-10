@@ -22,6 +22,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
+      control_player_id: "auto",
       debug: false,
       entity: "",
       playlists: [
@@ -41,6 +42,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
+      control_player_id: "auto",
       debug: false,
       ...config,
     };
@@ -476,6 +478,9 @@ class KodiSmartPlaylistCard extends HTMLElement {
         method: "Player.SetRepeat",
         repeat: repeatValue,
       };
+      if (config.control_player_id !== "auto" && config.control_player_id !== "" && config.control_player_id !== null) {
+        request.playerid = Number(config.control_player_id);
+      }
       const response = await this._hass.callService("kodi", "call_method", request);
       this._repeatEnabled = next;
       if (config.debug) {
@@ -505,6 +510,9 @@ class KodiSmartPlaylistCard extends HTMLElement {
         method: "Player.SetShuffle",
         shuffle: next,
       };
+      if (config.control_player_id !== "auto" && config.control_player_id !== "" && config.control_player_id !== null) {
+        request.playerid = Number(config.control_player_id);
+      }
       const response = await this._hass.callService("kodi", "call_method", request);
       this._shuffleEnabled = next;
       if (config.debug) {
@@ -557,6 +565,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       method: "Player.Open",
       open_mode: "partymode",
       window: "videolibrary",
+      control_player_id: "auto",
       debug: false,
       entity: "",
       ...config,
@@ -611,6 +620,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     }
     if (field === "open_mode") {
       normalizedValue = normalizeOpenMode(value);
+    }
+    if (field === "control_player_id") {
+      const raw = String(value || "auto");
+      normalizedValue = raw === "0" || raw === "1" ? raw : "auto";
     }
     const next = { ...this._config, [field]: normalizedValue };
     delete next.playlist;
@@ -767,6 +780,13 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         <select data-root="debug">
           <option value="false" ${this._config.debug ? "" : "selected"}>Aus</option>
           <option value="true" ${this._config.debug ? "selected" : ""}>Ein</option>
+        </select>
+
+        <label>Button Player ID</label>
+        <select data-root="control_player_id">
+          <option value="auto" ${String(this._config.control_player_id || "auto") === "auto" ? "selected" : ""}>auto</option>
+          <option value="0" ${String(this._config.control_player_id || "auto") === "0" ? "selected" : ""}>0</option>
+          <option value="1" ${String(this._config.control_player_id || "auto") === "1" ? "selected" : ""}>1</option>
         </select>
 
         <div class="section-head">

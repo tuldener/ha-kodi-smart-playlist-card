@@ -10,6 +10,7 @@ Eine Lovelace-Kachel, die eine oder mehrere Kodi Smart Playlists (`.xsp`) per JS
 - Frei konfigurierbarer Name und `window`
 - `open_mode` pro Playlist waehlt zwischen `partymode` und `file`
 - Zwei Zusatz-Icon-Kacheln unter der Playlist-Liste: `Repeat All Ein/Aus` und `Zufaellige Folge Ein/Aus`
+- Konfigurierbare `Button Player ID` fuer Repeat/Shuffle (`auto`, `0`, `1`)
 - Visueller Lovelace-Editor (GUI) zum Bearbeiten der Card-Konfiguration
 - `window`-Auswahl im Editor als Dropdown (`videolibrary`, `musiclibrary`, `videos`)
 - Icon-Auswahl pro Playlist im suchbaren Picker
@@ -69,6 +70,7 @@ playlists:
 - `open_mode: file` laedt die komplette Smart Playlist.
 - `Repeat All Ein/Aus` nutzt Kodi JSON-RPC `Player.SetRepeat`.
 - `Zufaellige Folge Ein/Aus` nutzt Kodi JSON-RPC `Player.SetShuffle`.
+- `Button Player ID` steuert optional, ob die Buttons mit festem `playerid` senden.
 
 ## Entspricht folgendem JSON-RPC Muster
 
