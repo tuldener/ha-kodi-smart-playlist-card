@@ -57,6 +57,19 @@ class KodiSmartPlaylistCard extends HTMLElement {
     this._render();
   }
 
+  connectedCallback() {
+    if (!this._refreshTimer) {
+      this._refreshTimer = setInterval(() => this._render(), 10000);
+    }
+  }
+
+  disconnectedCallback() {
+    if (this._refreshTimer) {
+      clearInterval(this._refreshTimer);
+      this._refreshTimer = null;
+    }
+  }
+
   getCardSize() {
     const count = this._getEntries().length;
     return Math.max(1, count);
@@ -111,6 +124,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
     const entries = this._getEntries();
     const hasEntity = !!this._config.entity;
     const hasEntries = entries.length > 0;
+    const mediaTitle = this._getNowPlayingTitle(stateObj);
 
     const rows = entries
       .map(
@@ -152,7 +166,13 @@ class KodiSmartPlaylistCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <ha-card>
         <div class="header">
-          <div class="title">${this._escape(this._config.name || "Kodi Playlist")}</div>
+          <div class="media-head">
+            <img class="kodi-logo" alt="Kodi" />
+            <div class="media-text">
+              <div class="now-label">Now Playing</div>
+              <div class="now-title">${this._escape(mediaTitle)}</div>
+            </div>
+          </div>
           <div class="status">Kodi: ${this._escape(state)}</div>
         </div>
         <div class="list">${rows}</div>
@@ -169,9 +189,35 @@ class KodiSmartPlaylistCard extends HTMLElement {
           border-bottom: 1px solid var(--divider-color);
         }
 
-        .title {
+        .media-head {
+          display: grid;
+          grid-template-columns: 40px 1fr;
+          gap: 10px;
+          align-items: center;
+        }
+
+        .kodi-logo {
+          width: 36px;
+          height: 36px;
+          border-radius: 6px;
+          object-fit: contain;
+          background: var(--card-background-color);
+          border: 1px solid var(--divider-color);
+        }
+
+        .now-label {
+          font-size: 0.72rem;
+          color: var(--secondary-text-color);
+          line-height: 1.2;
+        }
+
+        .now-title {
+          margin-top: 2px;
           font-weight: 600;
           line-height: 1.2;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .status {
@@ -269,6 +315,11 @@ class KodiSmartPlaylistCard extends HTMLElement {
       const button = buttons[i];
       button.addEventListener("click", () => this._handleTap(i));
     }
+
+    const logo = this.shadowRoot.querySelector("img.kodi-logo");
+    if (logo) {
+      this._setLogoImage(logo, stateObj);
+    }
   }
 
   async _handleTap(index) {
@@ -358,6 +409,49 @@ class KodiSmartPlaylistCard extends HTMLElement {
       composed: true,
     });
     this.dispatchEvent(event);
+  }
+
+  _getNowPlayingTitle(stateObj) {
+    if (!stateObj || !stateObj.attributes) {
+      return "Keine Wiedergabe";
+    }
+    const mediaTitle = stateObj.attributes.media_title;
+    const mediaArtist = stateObj.attributes.media_artist;
+    if (mediaTitle && mediaArtist) {
+      return mediaArtist + " - " + mediaTitle;
+    }
+    if (mediaTitle) {
+      return mediaTitle;
+    }
+    return "Keine Wiedergabe";
+  }
+
+  _setLogoImage(img, stateObj) {
+    const logoCandidates = [];
+    const entityPicture = stateObj && stateObj.attributes && stateObj.attributes.entity_picture;
+    if (entityPicture) {
+      logoCandidates.push(entityPicture);
+    }
+    // Primary fallback expected by users of ha-kodi-modular-control-card.
+    logoCandidates.push("/hacsfiles/ha-kodi-modular-control-card/kodi-logo.png");
+    logoCandidates.push("/hacsfiles/ha-kodi-modular-control-card/images/kodi-logo.png");
+    logoCandidates.push("/hacsfiles/ha-kodi-modular-control-card/assets/kodi-logo.png");
+
+    this._applyImageFallback(img, logoCandidates, 0);
+  }
+
+  _applyImageFallback(img, urls, index) {
+    if (!img || !urls || index >= urls.length) {
+      img.style.display = "none";
+      return;
+    }
+    img.onload = () => {
+      img.style.display = "block";
+    };
+    img.onerror = () => {
+      this._applyImageFallback(img, urls, index + 1);
+    };
+    img.src = urls[index];
   }
 
   _escape(value) {
