@@ -133,7 +133,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
             <ha-icon icon="${this._escape(entry.icon)}"></ha-icon>
             <div class="row-text">
               <div class="row-title">${this._escape(entry.name)}</div>
-              <div class="row-subtitle">${this._escape(entry.playlist)}</div>
             </div>
           </button>
         `;
@@ -309,14 +308,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
         .row-title {
           font-weight: 500;
           line-height: 1.2;
-        }
-
-        .row-subtitle {
-          margin-top: 3px;
-          color: var(--secondary-text-color);
-          font-size: 0.8rem;
-          line-height: 1.2;
-          word-break: break-all;
         }
 
         .hint {
