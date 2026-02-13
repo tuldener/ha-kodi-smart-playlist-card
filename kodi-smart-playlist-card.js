@@ -6,7 +6,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
   static getStubConfig() {
     return {
       type: "custom:kodi-smart-playlist-card",
-      name: "Kodi Playlist",
       icon: "mdi:playlist-play",
       method: "Player.Open",
       open_mode: "partymode",
@@ -33,7 +32,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
     }
 
     this._config = {
-      name: "Kodi Playlist",
       icon: "mdi:playlist-play",
       method: "Player.Open",
       open_mode: "partymode",
@@ -654,7 +652,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
   setConfig(config) {
     this._config = {
       type: "custom:kodi-smart-playlist-card",
-      name: "Kodi Playlist",
       icon: "mdi:playlist-play",
       method: "Player.Open",
       open_mode: "partymode",
@@ -668,7 +665,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       if (this._config.playlist) {
         this._config.playlists = [
           {
-            name: this._config.name || "Playlist",
+            name: "Playlist",
             icon: this._config.icon || "mdi:playlist-play",
             open_mode: this._config.open_mode || "partymode",
             window: this._config.window || "videolibrary",
@@ -716,6 +713,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
 
   _normalizeConfigForSave(config) {
     const normalized = { ...config };
+    delete normalized.name;
     delete normalized.repeat_all;
     delete normalized.random_on;
 
@@ -889,9 +887,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           <option value="" ${!this._config.entity ? "selected" : ""}>Bitte waehlen...</option>
           ${entityOptions}
         </select>
-
-        <label>Kartenname</label>
-        <input data-root="name" type="text" value="${this._escapeAttr(this._config.name || "")}" />
 
         <label>Debug</label>
         <select data-root="debug">
