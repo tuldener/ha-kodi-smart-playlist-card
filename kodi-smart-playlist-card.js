@@ -15,7 +15,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       playlists: [
         {
           name: "Filme",
-          icon: "mdi:movie-open-play",
+          icon: "mdi:playlist-play",
           playlist: "special://profile/playlists/video/Filme.xsp",
         },
       ],
