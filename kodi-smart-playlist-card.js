@@ -123,6 +123,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
     const entries = this._getEntries();
     const hasEntity = !!this._config.entity;
     const hasEntries = entries.length > 0;
+    const entityTitle =
+      (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || this._config.name || "Kodi";
     const mediaTitle = this._getNowPlayingTitle(stateObj);
 
     const rows = entries
@@ -165,12 +167,22 @@ class KodiSmartPlaylistCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <ha-card>
         <div class="header">
-          <div class="media-head">
-            <img class="kodi-logo" alt="Kodi" />
-            <div class="media-text">
-              <div class="now-label">Now Playing</div>
-              <div class="now-title">${this._escape(mediaTitle)}</div>
-            </div>
+          <div class="header-media-bg"></div>
+          <div class="media-text">
+            <div class="entity-title">${this._escape(entityTitle)}</div>
+            <div class="now-title">${this._escape(mediaTitle)}</div>
+          </div>
+          <div class="header-actions">
+            <button class="system-btn" data-system-method="System.Reboot" title="System Reboot" ${
+              disabled ? "disabled" : ""
+            }>
+              <ha-icon icon="mdi:restart"></ha-icon>
+            </button>
+            <button class="system-btn" data-system-method="System.Shutdown" title="System Shutdown" ${
+              disabled ? "disabled" : ""
+            }>
+              <ha-icon icon="mdi:power"></ha-icon>
+            </button>
           </div>
         </div>
         <div class="list">${rows}</div>
@@ -183,39 +195,89 @@ class KodiSmartPlaylistCard extends HTMLElement {
         ha-card { overflow: hidden; }
 
         .header {
-          padding: 12px 16px 8px;
-          border-bottom: 1px solid var(--divider-color);
-        }
-
-        .media-head {
+          position: relative;
           display: grid;
-          grid-template-columns: 40px 1fr;
-          gap: 10px;
+          grid-template-columns: 1fr auto;
           align-items: center;
+          gap: 12px;
+          padding: 14px 16px;
+          min-height: 96px;
+          border-bottom: 1px solid var(--divider-color);
+          overflow: hidden;
         }
 
-        .kodi-logo {
-          width: 36px;
-          height: 36px;
-          border-radius: 6px;
-          object-fit: contain;
-          background: var(--card-background-color);
-          border: 1px solid var(--divider-color);
+        .header-media-bg {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          background-image: linear-gradient(
+            110deg,
+            color-mix(in srgb, var(--card-background-color) 95%, black 5%) 0%,
+            color-mix(in srgb, var(--card-background-color) 85%, black 15%) 55%,
+            color-mix(in srgb, var(--card-background-color) 70%, black 30%) 100%
+          );
+          background-size: cover;
+          background-position: center;
+          filter: saturate(1.02);
         }
 
-        .now-label {
-          font-size: 0.72rem;
-          color: var(--secondary-text-color);
+        .media-text {
+          position: relative;
+          z-index: 1;
+          min-width: 0;
+        }
+
+        .entity-title {
+          font-size: 0.9rem;
+          color: color-mix(in srgb, var(--primary-text-color) 90%, white 10%);
           line-height: 1.2;
         }
 
         .now-title {
-          margin-top: 2px;
+          margin-top: 6px;
           font-weight: 600;
+          font-size: 1.25rem;
+          color: var(--primary-text-color);
           line-height: 1.2;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+        }
+
+        .header-actions {
+          position: relative;
+          z-index: 1;
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+
+        .system-btn {
+          width: 38px;
+          height: 38px;
+          border-radius: 999px;
+          border: 1px solid color-mix(in srgb, var(--divider-color) 70%, white 30%);
+          background: color-mix(in srgb, var(--card-background-color) 78%, black 22%);
+          color: var(--primary-text-color);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          padding: 0;
+        }
+
+        .system-btn ha-icon {
+          --mdc-icon-size: 20px;
+        }
+
+        .system-btn:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+
+        .system-btn:hover:not(:disabled) {
+          background: color-mix(in srgb, var(--card-background-color) 65%, black 35%);
         }
 
         .list {
@@ -308,10 +370,14 @@ class KodiSmartPlaylistCard extends HTMLElement {
       button.addEventListener("click", () => this._handleTap(i));
     }
 
-    const logo = this.shadowRoot.querySelector("img.kodi-logo");
-    if (logo) {
-      this._setLogoImage(logo, stateObj);
+    const actionButtons = this.shadowRoot.querySelectorAll("button.system-btn");
+    for (let i = 0; i < actionButtons.length; i += 1) {
+      const button = actionButtons[i];
+      const method = button.getAttribute("data-system-method");
+      button.addEventListener("click", () => this._handleSystemAction(method));
     }
+
+    this._setHeaderBackground(stateObj);
   }
 
   async _handleTap(index) {
@@ -395,6 +461,36 @@ class KodiSmartPlaylistCard extends HTMLElement {
     }
   }
 
+  async _handleSystemAction(method) {
+    if (!this._hass || !this._config || !this._config.entity || !method) {
+      this._showToast("Bitte zuerst eine Kodi-Entity konfigurieren.");
+      return;
+    }
+
+    const serviceData = {
+      entity_id: this._config.entity,
+      method: method,
+    };
+
+    try {
+      const response = await this._hass.callService("kodi", "call_method", serviceData);
+      if (this._config.debug) {
+        this._pushDebug(this._formatDebug("success", serviceData, response));
+      }
+      if (method === "System.Shutdown") {
+        this._showToast("System.Shutdown gesendet.");
+      } else {
+        this._showToast("System.Reboot gesendet.");
+      }
+    } catch (err) {
+      if (this._config.debug) {
+        this._pushDebug(this._formatDebug("error", serviceData, null, err));
+      }
+      const message = (err && err.message) || "Unbekannter Fehler";
+      this._showToast("Fehler: " + message);
+    }
+  }
+
   async _applyPostPlayCommands(entityId) {
     const commands = [
       { method: "Player.SetRepeat", payload: { playerid: 0, repeat: "all" } },
@@ -445,32 +541,38 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return "Keine Wiedergabe";
   }
 
-  _setLogoImage(img, stateObj) {
-    const logoCandidates = [];
-    const entityPicture = stateObj && stateObj.attributes && stateObj.attributes.entity_picture;
-    if (entityPicture) {
-      logoCandidates.push(entityPicture);
-    }
-    // Primary fallback expected by users of ha-kodi-modular-control-card.
-    logoCandidates.push("/hacsfiles/ha-kodi-modular-control-card/kodi-logo.png");
-    logoCandidates.push("/hacsfiles/ha-kodi-modular-control-card/images/kodi-logo.png");
-    logoCandidates.push("/hacsfiles/ha-kodi-modular-control-card/assets/kodi-logo.png");
-
-    this._applyImageFallback(img, logoCandidates, 0);
-  }
-
-  _applyImageFallback(img, urls, index) {
-    if (!img || !urls || index >= urls.length) {
-      img.style.display = "none";
+  _setHeaderBackground(stateObj) {
+    const bg = this.shadowRoot && this.shadowRoot.querySelector(".header-media-bg");
+    if (!bg) {
       return;
     }
-    img.onload = () => {
-      img.style.display = "block";
-    };
-    img.onerror = () => {
-      this._applyImageFallback(img, urls, index + 1);
-    };
-    img.src = urls[index];
+    const artwork = this._getArtworkUrl(stateObj);
+    if (!artwork) {
+      return;
+    }
+    const safeArtwork = String(artwork).replace(/"/g, "%22");
+    bg.style.backgroundImage =
+      'linear-gradient(100deg, rgba(17, 16, 12, 0.84) 0%, rgba(17, 16, 12, 0.70) 52%, rgba(17, 16, 12, 0.48) 100%), url("' +
+      safeArtwork +
+      '")';
+  }
+
+  _getArtworkUrl(stateObj) {
+    if (!stateObj || !stateObj.attributes) {
+      return "";
+    }
+    let artwork =
+      stateObj.attributes.entity_picture ||
+      stateObj.attributes.media_image_url ||
+      stateObj.attributes.media_image ||
+      "";
+    if (!artwork) {
+      return "";
+    }
+    if (typeof this._hass === "object" && typeof this._hass.hassUrl === "function" && artwork.startsWith("/")) {
+      artwork = this._hass.hassUrl(artwork);
+    }
+    return artwork;
   }
 
   _escape(value) {
