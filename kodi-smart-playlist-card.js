@@ -688,7 +688,11 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    this._render();
+    if (!this.shadowRoot || !this.shadowRoot.innerHTML) {
+      this._render();
+      return;
+    }
+    this._syncIconPickersHass();
   }
 
   _emitConfig(config) {
@@ -1007,9 +1011,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     const playlistIconPickers = this.shadowRoot.querySelectorAll("ha-icon-picker[data-field='icon']");
     for (let i = 0; i < playlistIconPickers.length; i += 1) {
       const picker = playlistIconPickers[i];
-      if (this._hass) {
-        picker.hass = this._hass;
-      }
       picker.addEventListener("value-changed", (event) => {
         const index = Number(picker.getAttribute("data-index"));
         const value =
@@ -1030,6 +1031,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         this._updatePlaylistField(index, field, select.value);
       });
     }
+    this._syncIconPickersHass();
 
     const removeButtons = this.shadowRoot.querySelectorAll("button[data-action='remove']");
     for (let i = 0; i < removeButtons.length; i += 1) {
@@ -1070,6 +1072,16 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         return `<option value="${this._escapeAttr(name)}" ${selected}>${this._escape(name)}</option>`;
       }.bind(this))
       .join("");
+  }
+
+  _syncIconPickersHass() {
+    if (!this.shadowRoot || !this._hass) {
+      return;
+    }
+    const playlistIconPickers = this.shadowRoot.querySelectorAll("ha-icon-picker[data-field='icon']");
+    for (let i = 0; i < playlistIconPickers.length; i += 1) {
+      playlistIconPickers[i].hass = this._hass;
+    }
   }
 
   _getOpenModeOptions(selectedMode) {
