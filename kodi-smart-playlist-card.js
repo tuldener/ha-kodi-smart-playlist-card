@@ -550,7 +550,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
     if (!artwork) {
       return;
     }
-    const safeArtwork = String(artwork).replace(/"/g, "%22");
+    const refreshedArtwork = this._withCacheBust(artwork);
+    const safeArtwork = String(refreshedArtwork).replace(/"/g, "%22");
     bg.style.backgroundImage =
       'linear-gradient(100deg, rgba(17, 16, 12, 0.84) 0%, rgba(17, 16, 12, 0.70) 52%, rgba(17, 16, 12, 0.48) 100%), url("' +
       safeArtwork +
@@ -573,6 +574,15 @@ class KodiSmartPlaylistCard extends HTMLElement {
       artwork = this._hass.hassUrl(artwork);
     }
     return artwork;
+  }
+
+  _withCacheBust(url) {
+    if (!url) {
+      return "";
+    }
+    const stamp = Math.floor(Date.now() / 10000);
+    const separator = String(url).indexOf("?") === -1 ? "?" : "&";
+    return String(url) + separator + "cb=" + stamp;
   }
 
   _escape(value) {
