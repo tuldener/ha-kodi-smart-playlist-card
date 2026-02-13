@@ -119,7 +119,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
     }
 
     const stateObj = this._hass && this._hass.states && this._hass.states[this._config.entity];
-    const state = stateObj && stateObj.state ? stateObj.state : "unavailable";
     const disabled = !this._hass || !stateObj;
     const entries = this._getEntries();
     const hasEntity = !!this._config.entity;
@@ -173,7 +172,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
               <div class="now-title">${this._escape(mediaTitle)}</div>
             </div>
           </div>
-          <div class="status">Kodi: ${this._escape(state)}</div>
         </div>
         <div class="list">${rows}</div>
         ${!hasEntity ? '<div class="hint">Bitte im Editor eine Kodi-Entity auswaehlen.</div>' : ""}
@@ -218,12 +216,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-        }
-
-        .status {
-          margin-top: 2px;
-          color: var(--secondary-text-color);
-          font-size: 0.8rem;
         }
 
         .list {
