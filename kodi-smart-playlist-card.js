@@ -386,6 +386,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
+      await this._applyPostPlayCommands(config.entity);
       if (config.debug) {
         this._pushDebug(this._formatDebug("success", serviceData, response));
       }
@@ -399,6 +400,32 @@ class KodiSmartPlaylistCard extends HTMLElement {
       }
       this._showToast("Fehler: " + message);
       this._render();
+    }
+  }
+
+  async _applyPostPlayCommands(entityId) {
+    const commands = [
+      { method: "Player.SetRepeat", payload: { playerid: 0, repeat: "all" } },
+      { method: "Player.SetShuffle", payload: { playerid: 0, shuffle: true } },
+    ];
+
+    for (let i = 0; i < commands.length; i += 1) {
+      const command = commands[i];
+      const request = {
+        entity_id: entityId,
+        method: command.method,
+        ...command.payload,
+      };
+      try {
+        const response = await this._hass.callService("kodi", "call_method", request);
+        if (this._config && this._config.debug) {
+          this._pushDebug(this._formatDebug("success", request, response));
+        }
+      } catch (err) {
+        if (this._config && this._config.debug) {
+          this._pushDebug(this._formatDebug("error", request, null, err));
+        }
+      }
     }
   }
 
