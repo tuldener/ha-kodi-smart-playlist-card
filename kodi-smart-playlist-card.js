@@ -388,6 +388,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
     try {
       const method = entry.method || "Player.Open";
+      const openMode = entry.open_mode || "partymode";
       serviceData = {
         entity_id: config.entity,
         method: method,
@@ -396,11 +397,14 @@ class KodiSmartPlaylistCard extends HTMLElement {
       // Home Assistant kodi.call_method expects method parameters as top-level fields.
       if (entry.params && typeof entry.params === "object" && !Array.isArray(entry.params)) {
         Object.assign(serviceData, entry.params);
+      } else if (openMode === "gui_activate_window") {
+        serviceData.method = "GUI.ActivateWindow";
+        serviceData.window = entry.window || "videolibrary";
+        serviceData.parameters = [entry.playlist];
       } else if (method === "GUI.ActivateWindow") {
         serviceData.window = entry.window || "videolibrary";
         serviceData.parameters = [entry.playlist];
       } else if (method === "Player.Open") {
-        const openMode = entry.open_mode || "partymode";
         if (openMode === "xbmc_builtin_party") {
           const commands = [
             "PlayMedia(" + entry.playlist + ")",
@@ -428,7 +432,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
         }
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       } else {
-        const openMode = entry.open_mode || "partymode";
         serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
       }
 
@@ -1085,7 +1088,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
   }
 
   _getOpenModeOptions(selectedMode) {
-    const modes = ["partymode", "file", "xbmc_builtin_party"];
+    const modes = ["partymode", "file", "gui_activate_window", "xbmc_builtin_party"];
     const options = modes.indexOf(selectedMode) === -1 ? [selectedMode].concat(modes) : modes;
     return options
       .map(
@@ -1094,6 +1097,8 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           const label =
             mode === "file"
               ? "file (komplette Playlist)"
+              : mode === "gui_activate_window"
+                ? "GUI.ActivateWindow (Fenster + Parameter)"
               : mode === "xbmc_builtin_party"
                 ? "xbmc_builtin_party (PlayMedia + Repeat + Random)"
                 : "partymode (dynamisch)";
