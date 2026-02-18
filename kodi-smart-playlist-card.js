@@ -16,7 +16,10 @@ class KodiSmartPlaylistCard extends HTMLElement {
         {
           name: "Filme",
           icon: "mdi:playlist-play",
-          playlist: "special://profile/playlists/video/Filme.xsp",
+          playlist_type: "video",
+          playlist: "playlist.xsp",
+          repeat_mode: "off",
+          shuffle: false,
         },
       ],
     };
@@ -87,12 +90,15 @@ class KodiSmartPlaylistCard extends HTMLElement {
           function (item) {
             return {
               name: item.name || item.playlist,
-              playlist: item.playlist,
+              playlist: this._resolvePlaylistPath(item.playlist, item.playlist_type),
+              playlist_type: item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist) || "mixed",
               icon: item.icon || this._config.icon,
               method: item.method || this._config.method || "Player.Open",
               open_mode: item.open_mode || "partymode",
               window: item.window || "videolibrary",
               params: item.params,
+              repeat_mode: item.repeat_mode || "off",
+              shuffle: this._toBool(item.shuffle),
             };
           }.bind(this)
         );
@@ -101,12 +107,15 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return [
       {
         name: this._config.name,
-        playlist: this._config.playlist,
+        playlist: this._resolvePlaylistPath(this._config.playlist, this._config.playlist_type),
+        playlist_type: this._config.playlist_type || this._guessPlaylistTypeFromPath(this._config.playlist) || "mixed",
         icon: this._config.icon,
         method: this._config.method || "Player.Open",
         open_mode: "partymode",
         window: "videolibrary",
         params: this._config.params,
+        repeat_mode: this._config.repeat_mode || "off",
+        shuffle: this._toBool(this._config.shuffle),
       },
     ];
   }
@@ -399,10 +408,10 @@ class KodiSmartPlaylistCard extends HTMLElement {
         Object.assign(serviceData, entry.params);
       } else if (openMode === "gui_activate_window") {
         serviceData.method = "GUI.ActivateWindow";
-        serviceData.window = entry.window || "videolibrary";
+        serviceData.window = entry.window || this._getWindowForPlaylistType(entry.playlist_type);
         serviceData.parameters = [entry.playlist];
       } else if (method === "GUI.ActivateWindow") {
-        serviceData.window = entry.window || "videolibrary";
+        serviceData.window = entry.window || this._getWindowForPlaylistType(entry.playlist_type);
         serviceData.parameters = [entry.playlist];
       } else if (method === "Player.Open") {
         if (openMode === "xbmc_builtin_party") {
@@ -436,7 +445,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
-      await this._applyPostPlayCommands(config.entity);
+      await this._applyPostPlayCommands(config.entity, entry);
       if (config.debug) {
         this._pushDebug(this._formatDebug("success", serviceData, response));
       }
@@ -483,11 +492,16 @@ class KodiSmartPlaylistCard extends HTMLElement {
     }
   }
 
-  async _applyPostPlayCommands(entityId) {
-    const commands = [
-      { method: "Player.SetRepeat", payload: { playerid: 0, repeat: "all" } },
-      { method: "Player.SetShuffle", payload: { playerid: 0, shuffle: true } },
-    ];
+  async _applyPostPlayCommands(entityId, entry) {
+    const playerId = 1;
+    const commands = [];
+    const repeatMode = (entry && entry.repeat_mode) || "off";
+    const shuffleEnabled = this._toBool(entry && entry.shuffle);
+
+    if (repeatMode === "all" || repeatMode === "one") {
+      commands.push({ method: "Player.SetRepeat", payload: { playerid: playerId, repeat: repeatMode } });
+    }
+    commands.push({ method: "Player.SetShuffle", payload: { playerid: playerId, shuffle: shuffleEnabled } });
 
     for (let i = 0; i < commands.length; i += 1) {
       const command = commands[i];
@@ -597,6 +611,49 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return "videolibrary";
   }
 
+  _getPlaylistBasePath(playlistType) {
+    if (playlistType === "music") {
+      return "special://profile/playlists/music/";
+    }
+    if (playlistType === "video") {
+      return "special://profile/playlists/video/";
+    }
+    return "special://profile/playlists/mixed/";
+  }
+
+  _resolvePlaylistPath(playlist, playlistType) {
+    const value = String(playlist || "").trim();
+    if (!value) {
+      return "";
+    }
+    if (value.indexOf("://") !== -1 || value.indexOf("/") !== -1) {
+      return value;
+    }
+    return this._getPlaylistBasePath(playlistType) + value;
+  }
+
+  _guessPlaylistTypeFromPath(playlistPath) {
+    const path = String(playlistPath || "").toLowerCase();
+    if (path.indexOf("/playlists/music/") !== -1) {
+      return "music";
+    }
+    if (path.indexOf("/playlists/video/") !== -1) {
+      return "video";
+    }
+    return "mixed";
+  }
+
+  _getWindowForPlaylistType(playlistType) {
+    if (playlistType === "music") {
+      return "musiclibrary";
+    }
+    return "videolibrary";
+  }
+
+  _toBool(value) {
+    return value === true || value === "true";
+  }
+
   _formatDebug(status, requestPayload, responsePayload, err) {
     const parts = [];
     parts.push("status: " + status);
@@ -662,8 +719,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
             name: "Playlist",
             icon: this._config.icon || "mdi:playlist-play",
             open_mode: this._config.open_mode || "partymode",
-            window: this._config.window || "videolibrary",
-            playlist: this._config.playlist,
+            playlist_type: this._guessPlaylistTypeFromPath(this._config.playlist),
+            playlist: this._extractPlaylistName(this._config.playlist) || "playlist.xsp",
+            repeat_mode: "off",
+            shuffle: false,
           },
         ];
       } else {
@@ -672,8 +731,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
             name: "Neue Playlist",
             icon: this._config.icon || "mdi:playlist-play",
             open_mode: this._config.open_mode || "partymode",
-            window: this._config.window || "videolibrary",
-            playlist: "",
+            playlist_type: "mixed",
+            playlist: "playlist.xsp",
+            repeat_mode: "off",
+            shuffle: false,
           },
         ];
       }
@@ -681,7 +742,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     this._config.playlists = (this._config.playlists || []).map((item) => ({
       ...item,
       open_mode: item.open_mode || this._config.open_mode || "partymode",
-      window: item.window || this._config.window || "videolibrary",
+      playlist_type: item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist),
+      playlist: this._extractPlaylistName(item.playlist) || "playlist.xsp",
+      repeat_mode: item.repeat_mode || "off",
+      shuffle: this._toBool(item.shuffle),
     }));
     delete this._config.repeat_all;
     delete this._config.random_on;
@@ -719,7 +783,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       normalized.playlists = normalized.playlists.map((item) => ({
         ...item,
         open_mode: item.open_mode || normalized.open_mode || "partymode",
-        window: item.window || normalized.window || "videolibrary",
+        playlist_type: item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist),
+        playlist: this._extractPlaylistName(item.playlist) || "playlist.xsp",
+        repeat_mode: item.repeat_mode || "off",
+        shuffle: this._toBool(item.shuffle),
       }));
       delete normalized.open_mode;
       delete normalized.window;
@@ -748,7 +815,11 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       return;
     }
 
-    playlists[index][field] = value;
+    if (field === "shuffle") {
+      playlists[index][field] = value === "true";
+    } else {
+      playlists[index][field] = value;
+    }
 
     const next = {
       ...this._config,
@@ -766,8 +837,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         name: "Neue Playlist",
         icon: this._config.icon || "mdi:playlist-play",
         open_mode: this._config.open_mode || "partymode",
-        window: this._config.window || "videolibrary",
-        playlist: "",
+        playlist_type: "mixed",
+        playlist: "playlist.xsp",
+        repeat_mode: "off",
+        shuffle: false,
       },
     ]);
 
@@ -791,8 +864,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         name: "Neue Playlist",
         icon: this._config.icon || "mdi:playlist-play",
         open_mode: this._config.open_mode || "partymode",
-        window: this._config.window || "videolibrary",
-        playlist: "",
+        playlist_type: "mixed",
+        playlist: "playlist.xsp",
+        repeat_mode: "off",
+        shuffle: false,
       });
     }
 
@@ -860,9 +935,9 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
                 value="${this._escapeAttr(item.icon || this._config.icon || "mdi:playlist-play")}"
               ></ha-icon-picker>
 
-              <label>Window</label>
-              <select data-field="window" data-index="${index}">
-                ${this._getWindowOptions(item.window || this._config.window || "videolibrary")}
+              <label>Kategorie</label>
+              <select data-field="playlist_type" data-index="${index}">
+                ${this._getPlaylistTypeOptions(item.playlist_type || "mixed")}
               </select>
 
               <label>Open Mode</label>
@@ -870,8 +945,24 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
                 ${this._getOpenModeOptions(item.open_mode || this._config.open_mode || "partymode")}
               </select>
 
-              <label>Playlist-Pfad (.xsp)</label>
-              <input data-field="playlist" data-index="${index}" type="text" value="${this._escapeAttr(item.playlist || "")}" />
+              <label>Playlist-Datei (.xsp)</label>
+              <input
+                data-field="playlist"
+                data-index="${index}"
+                type="text"
+                placeholder="playlist.xsp"
+                value="${this._escapeAttr(item.playlist || "playlist.xsp")}"
+              />
+
+              <label>Repeat</label>
+              <select data-field="repeat_mode" data-index="${index}">
+                ${this._getRepeatModeOptions(item.repeat_mode || "off")}
+              </select>
+
+              <label>Shuffle</label>
+              <select data-field="shuffle" data-index="${index}">
+                ${this._getBooleanOptions(this._toBool(item.shuffle))}
+              </select>
             </div>
           `;
         }.bind(this)
@@ -1066,15 +1157,35 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       .replace(/>/g, "&gt;");
   }
 
-  _getWindowOptions(selectedWindow) {
-    const baseOptions = ["videolibrary", "musiclibrary", "videos"];
-    const options = baseOptions.indexOf(selectedWindow) === -1 ? [selectedWindow].concat(baseOptions) : baseOptions;
+  _getPlaylistTypeOptions(selectedType) {
+    const baseOptions = ["mixed", "music", "video"];
+    const options = baseOptions.indexOf(selectedType) === -1 ? [selectedType].concat(baseOptions) : baseOptions;
     return options
       .map(function (name) {
-        const selected = name === selectedWindow ? "selected" : "";
+        const selected = name === selectedType ? "selected" : "";
         return `<option value="${this._escapeAttr(name)}" ${selected}>${this._escape(name)}</option>`;
       }.bind(this))
       .join("");
+  }
+
+  _getRepeatModeOptions(selectedMode) {
+    const modes = ["off", "all", "one"];
+    const options = modes.indexOf(selectedMode) === -1 ? [selectedMode].concat(modes) : modes;
+    return options
+      .map(
+        function (mode) {
+          const selected = mode === selectedMode ? "selected" : "";
+          return `<option value="${this._escapeAttr(mode)}" ${selected}>${this._escape(mode)}</option>`;
+        }.bind(this)
+      )
+      .join("");
+  }
+
+  _getBooleanOptions(selectedValue) {
+    return `
+      <option value="false" ${selectedValue ? "" : "selected"}>aus</option>
+      <option value="true" ${selectedValue ? "selected" : ""}>ein</option>
+    `;
   }
 
   _syncIconPickersHass() {
@@ -1106,6 +1217,30 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         }.bind(this)
       )
       .join("");
+  }
+
+  _toBool(value) {
+    return value === true || value === "true";
+  }
+
+  _guessPlaylistTypeFromPath(playlistPath) {
+    const path = String(playlistPath || "").toLowerCase();
+    if (path.indexOf("/playlists/music/") !== -1) {
+      return "music";
+    }
+    if (path.indexOf("/playlists/video/") !== -1) {
+      return "video";
+    }
+    return "mixed";
+  }
+
+  _extractPlaylistName(playlistPath) {
+    const value = String(playlistPath || "").trim();
+    if (!value) {
+      return "";
+    }
+    const lastSlash = value.lastIndexOf("/");
+    return lastSlash >= 0 ? value.slice(lastSlash + 1) : value;
   }
 
   _getKodiEntities() {
