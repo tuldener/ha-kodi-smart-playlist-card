@@ -437,10 +437,13 @@ class KodiSmartPlaylistCard extends HTMLElement {
         }
       } else if (openMode === "partymode") {
         const explicitPartyPlaylist = String(entry.partymode_playlist || "").trim();
+        const defaultPartyPlaylist = this._getDefaultPartyModePlaylistPath(entry.playlist_type);
+        const useDynamicPartyMode =
+          !explicitPartyPlaylist || explicitPartyPlaylist.toLowerCase() === defaultPartyPlaylist.toLowerCase();
         serviceData.item = {
-          partymode: explicitPartyPlaylist
+          partymode: !useDynamicPartyMode
             ? this._resolvePlaylistPath(explicitPartyPlaylist, entry.playlist_type)
-            : this._getDefaultPartyModePlaylistPath(entry.playlist_type),
+            : this._getPartyModeTarget(entry.playlist_type),
         };
       } else if (method === "Player.Open") {
         serviceData.item = { file: entry.playlist };
@@ -943,9 +946,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       playlist: this._extractPlaylistName(item.playlist) || "playlist.xsp",
       directory: item.directory || this._getPlaylistBasePath(item.playlist_type || "mixed"),
       open_mode: this._normalizeOpenMode(item.open_mode || this._config.open_mode || "file", item.playlist_type),
-      partymode_playlist:
-        item.partymode_playlist ||
-        this._getDefaultPartyModePlaylistPath(item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist)),
+      partymode_playlist: item.partymode_playlist || "",
       repeat_mode: item.repeat_mode || "off",
       shuffle: this._toBool(item.shuffle),
     }));
@@ -988,9 +989,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         playlist: this._extractPlaylistName(item.playlist) || "playlist.xsp",
         directory: item.directory || this._getPlaylistBasePath(item.playlist_type || "mixed"),
         open_mode: this._normalizeOpenMode(item.open_mode || normalized.open_mode || "file", item.playlist_type),
-        partymode_playlist:
-          item.partymode_playlist ||
-          this._getDefaultPartyModePlaylistPath(item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist)),
+        partymode_playlist: item.partymode_playlist || "",
         repeat_mode: item.repeat_mode || "off",
         shuffle: this._toBool(item.shuffle),
       }));
@@ -1027,12 +1026,8 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       playlists[index][field] = value;
       playlists[index].directory = this._getPlaylistBasePath(value);
       playlists[index].open_mode = this._normalizeOpenMode(playlists[index].open_mode || "file", value);
-      playlists[index].partymode_playlist = this._getDefaultPartyModePlaylistPath(value);
     } else if (field === "open_mode") {
       playlists[index][field] = this._normalizeOpenMode(value, playlists[index].playlist_type || "mixed");
-      if (playlists[index][field] === "partymode" && !playlists[index].partymode_playlist) {
-        playlists[index].partymode_playlist = this._getDefaultPartyModePlaylistPath(playlists[index].playlist_type);
-      }
     } else {
       playlists[index][field] = value;
     }
@@ -1205,8 +1200,8 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
                 data-field="partymode_playlist"
                 data-index="${index}"
                 type="text"
-                placeholder="playlist.xsp oder voller Pfad"
-                value="${this._escapeAttr(item.partymode_playlist || this._getDefaultPartyModePlaylistPath(playlistType))}"
+                placeholder="${this._escapeAttr(this._getDefaultPartyModePlaylistPath(playlistType))}"
+                value="${this._escapeAttr(item.partymode_playlist || "")}"
               />`
                   : ""
               }
