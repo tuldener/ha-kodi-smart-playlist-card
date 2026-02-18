@@ -770,10 +770,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       return null;
     }
     const options = {};
-    const playername = String(entry.options_playername || "").trim();
-    if (playername) {
-      options.playername = playername;
-    }
 
     const optionsRepeat = String(entry.options_repeat || "").trim();
     if (optionsRepeat) {
@@ -1211,15 +1207,6 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               </select>`
                   : ""
               }
-
-              <label>Option playername (optional)</label>
-              <input
-                data-field="options_playername"
-                data-index="${index}"
-                type="text"
-                placeholder="default oder Name"
-                value="${this._escapeAttr(item.options_playername || "")}"
-              />
 
               <label>Option repeat (optional)</label>
               <select data-field="options_repeat" data-index="${index}">
