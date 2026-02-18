@@ -436,11 +436,25 @@ class KodiSmartPlaylistCard extends HTMLElement {
           serviceData.item = { directory: directoryTarget };
         }
       } else if (openMode === "partymode") {
-        serviceData.item = { partymode: this._getPartyModeTarget(entry.playlist_type) };
+        const explicitPartyPlaylist = String(entry.partymode_playlist || "").trim();
+        serviceData.item = {
+          partymode: explicitPartyPlaylist
+            ? this._resolvePlaylistPath(explicitPartyPlaylist, entry.playlist_type)
+            : this._getPartyModeTarget(entry.playlist_type),
+        };
       } else if (method === "Player.Open") {
         serviceData.item = { file: entry.playlist };
       } else {
         serviceData.item = { file: entry.playlist };
+      }
+
+      const builtItem = this._buildExtendedPlayerOpenItem(entry);
+      if (builtItem) {
+        serviceData.item = builtItem;
+      }
+      const builtOptions = this._buildPlayerOpenOptions(entry);
+      if (builtOptions) {
+        serviceData.options = builtOptions;
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
@@ -694,6 +708,101 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
   _getPartyModeTarget(playlistType) {
     return playlistType === "music" ? "music" : "video";
+  }
+
+  _buildExtendedPlayerOpenItem(entry) {
+    if (!entry) {
+      return null;
+    }
+    const playlistId = this._toNumberOrNull(entry.item_playlistid);
+    if (playlistId !== null) {
+      const position = this._toNumberOrNull(entry.item_position);
+      return position === null ? { playlistid: playlistId } : { playlistid: playlistId, position: position };
+    }
+    const path = String(entry.item_path || "").trim();
+    if (path) {
+      const item = { path: path };
+      const randomVal = this._toOptionalBool(entry.item_random);
+      const recursiveVal = this._toOptionalBool(entry.item_recursive);
+      if (randomVal !== null) {
+        item.random = randomVal;
+      }
+      if (recursiveVal !== null) {
+        item.recursive = recursiveVal;
+      }
+      return item;
+    }
+    const broadcastId = this._toNumberOrNull(entry.item_broadcastid);
+    if (broadcastId !== null) {
+      return { broadcastid: broadcastId };
+    }
+    const channelId = this._toNumberOrNull(entry.item_channelid);
+    if (channelId !== null) {
+      return { channelid: channelId };
+    }
+    const recordingId = this._toNumberOrNull(entry.item_recordingid);
+    if (recordingId !== null) {
+      return { recordingid: recordingId };
+    }
+    return null;
+  }
+
+  _buildPlayerOpenOptions(entry) {
+    if (!entry) {
+      return null;
+    }
+    const options = {};
+    const playername = String(entry.options_playername || "").trim();
+    if (playername) {
+      options.playername = playername;
+    }
+
+    const optionsRepeat = String(entry.options_repeat || "").trim();
+    if (optionsRepeat) {
+      options.repeat = optionsRepeat;
+    }
+
+    const resumeMode = String(entry.options_resume_mode || "").trim();
+    if (resumeMode === "true") {
+      options.resume = true;
+    } else if (resumeMode === "false") {
+      options.resume = false;
+    } else if (resumeMode === "percent") {
+      const pct = this._toNumberOrNull(entry.options_resume_percent);
+      if (pct !== null) {
+        options.resume = pct;
+      }
+    } else if (resumeMode === "time") {
+      const t = this._parseResumeTime(entry.options_resume_time);
+      if (t) {
+        options.resume = t;
+      }
+    }
+
+    const shuffled = this._toOptionalBool(entry.options_shuffled);
+    if (shuffled !== null) {
+      options.shuffled = shuffled;
+    }
+
+    return Object.keys(options).length > 0 ? options : null;
+  }
+
+  _parseResumeTime(value) {
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return null;
+    }
+    const parts = raw.split(":");
+    if (parts.length !== 3) {
+      return null;
+    }
+    const h = Number(parts[0]);
+    const m = Number(parts[1]);
+    const s = Number(parts[2]);
+    if (!Number.isFinite(h) || !Number.isFinite(m) || !Number.isFinite(s)) {
+      return null;
+    }
+    return { hours: h, minutes: m, seconds: s, milliseconds: 0 };
   }
 
   _extractPlaylistName(playlistPath) {
@@ -1001,7 +1110,11 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           const openMode = this._normalizeOpenMode(item.open_mode || this._config.open_mode || "file", playlistType);
           const showFile = openMode === "file";
           const showDirectory = openMode === "directory";
+          const showPartyFile = openMode === "partymode";
           const showRepeatShuffle = openMode !== "partymode";
+          const resumeMode = String(item.options_resume_mode || "none");
+          const showResumePercent = resumeMode === "percent";
+          const showResumeTime = resumeMode === "time";
           return `
             <div class="playlist-item" data-index="${index}">
               <div class="row-head">
@@ -1055,6 +1168,19 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               }
 
               ${
+                showPartyFile
+                  ? `<label>Partymode Playlist (.xsp, optional)</label>
+              <input
+                data-field="partymode_playlist"
+                data-index="${index}"
+                type="text"
+                placeholder="playlist.xsp oder voller Pfad"
+                value="${this._escapeAttr(item.partymode_playlist || "")}"
+              />`
+                  : ""
+              }
+
+              ${
                 showRepeatShuffle
                   ? `<label>Repeat</label>
               <select data-field="repeat_mode" data-index="${index}">
@@ -1065,6 +1191,59 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               <select data-field="shuffle" data-index="${index}">
                 ${this._getBooleanOptions(this._toBool(item.shuffle))}
               </select>`
+                  : ""
+              }
+
+              <label>Option playername (optional)</label>
+              <input
+                data-field="options_playername"
+                data-index="${index}"
+                type="text"
+                placeholder="default oder Name"
+                value="${this._escapeAttr(item.options_playername || "")}"
+              />
+
+              <label>Option repeat (optional)</label>
+              <select data-field="options_repeat" data-index="${index}">
+                ${this._getOptionsRepeatOptions(item.options_repeat || "")}
+              </select>
+
+              <label>Option shuffled (optional)</label>
+              <select data-field="options_shuffled" data-index="${index}">
+                ${this._getNullableBooleanOptions(item.options_shuffled)}
+              </select>
+
+              <label>Option resume</label>
+              <select data-field="options_resume_mode" data-index="${index}">
+                ${this._getResumeModeOptions(item.options_resume_mode || "none")}
+              </select>
+
+              ${
+                showResumePercent
+                  ? `<label>Resume Prozent</label>
+              <input
+                data-field="options_resume_percent"
+                data-index="${index}"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="z. B. 12.5"
+                value="${this._escapeAttr(item.options_resume_percent || "")}"
+              />`
+                  : ""
+              }
+
+              ${
+                showResumeTime
+                  ? `<label>Resume Zeit (HH:MM:SS)</label>
+              <input
+                data-field="options_resume_time"
+                data-index="${index}"
+                type="text"
+                placeholder="00:10:00"
+                value="${this._escapeAttr(item.options_resume_time || "")}"
+              />`
                   : ""
               }
             </div>
@@ -1292,6 +1471,48 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     `;
   }
 
+  _getNullableBooleanOptions(value) {
+    const normalized = value === true || value === "true" ? "true" : value === false || value === "false" ? "false" : "";
+    return `
+      <option value="" ${normalized === "" ? "selected" : ""}>nicht gesetzt</option>
+      <option value="true" ${normalized === "true" ? "selected" : ""}>true</option>
+      <option value="false" ${normalized === "false" ? "selected" : ""}>false</option>
+    `;
+  }
+
+  _getOptionsRepeatOptions(value) {
+    const current = String(value || "");
+    const options = ["", "off", "one", "all"];
+    return options
+      .map(
+        function (mode) {
+          const selected = mode === current ? "selected" : "";
+          const label = mode === "" ? "nicht gesetzt" : mode;
+          return `<option value="${this._escapeAttr(mode)}" ${selected}>${this._escape(label)}</option>`;
+        }.bind(this)
+      )
+      .join("");
+  }
+
+  _getResumeModeOptions(value) {
+    const current = String(value || "none");
+    const options = [
+      { value: "none", label: "nicht gesetzt" },
+      { value: "false", label: "false" },
+      { value: "true", label: "true" },
+      { value: "percent", label: "prozent" },
+      { value: "time", label: "zeit" },
+    ];
+    return options
+      .map(
+        function (opt) {
+          const selected = opt.value === current ? "selected" : "";
+          return `<option value="${this._escapeAttr(opt.value)}" ${selected}>${this._escape(opt.label)}</option>`;
+        }.bind(this)
+      )
+      .join("");
+  }
+
   _syncIconPickersHass() {
     if (!this.shadowRoot || !this._hass) {
       return;
@@ -1326,6 +1547,24 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
 
   _toBool(value) {
     return value === true || value === "true";
+  }
+
+  _toOptionalBool(value) {
+    if (value === true || value === "true") {
+      return true;
+    }
+    if (value === false || value === "false") {
+      return false;
+    }
+    return null;
+  }
+
+  _toNumberOrNull(value) {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
   }
 
   _guessPlaylistTypeFromPath(playlistPath) {
