@@ -104,10 +104,11 @@ class KodiSmartPlaylistCard extends HTMLElement {
             const playlistType = item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist) || "mixed";
             const openMode = this._normalizeOpenMode(item.open_mode || this._config.open_mode || "file", playlistType);
             const playlistPath = this._resolvePlaylistPath(item.playlist, playlistType);
+            const directoryPath = item.directory || playlistPath || this._getPlaylistBasePath(playlistType);
             return {
               name: item.name || this._extractPlaylistName(item.playlist) || playlistType,
               playlist: playlistPath,
-              directory: item.directory || this._getPlaylistBasePath(playlistType),
+              directory: directoryPath,
               playlist_type: playlistType,
               icon: item.icon || this._config.icon,
               method: item.method || this._config.method || "Player.Open",
@@ -427,7 +428,13 @@ class KodiSmartPlaylistCard extends HTMLElement {
       if (entry.params && typeof entry.params === "object" && !Array.isArray(entry.params)) {
         Object.assign(serviceData, entry.params);
       } else if (openMode === "directory") {
-        serviceData.item = { directory: entry.directory || this._getPlaylistBasePath(entry.playlist_type) };
+        const directoryTarget = String(entry.directory || this._getPlaylistBasePath(entry.playlist_type)).trim();
+        if (directoryTarget.toLowerCase().endsWith(".xsp")) {
+          // Kodi must open .xsp as file; opening it as directory just lists the .xsp itself.
+          serviceData.item = { file: directoryTarget };
+        } else {
+          serviceData.item = { directory: directoryTarget };
+        }
       } else if (openMode === "partymode") {
         serviceData.item = { partymode: this._getPartyModeTarget(entry.playlist_type) };
       } else if (method === "Player.Open") {
