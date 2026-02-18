@@ -485,6 +485,11 @@ class KodiSmartPlaylistCard extends HTMLElement {
   }
 
   async _applyPostPlayCommands(entityId, entry) {
+    const mode = this._normalizeOpenMode((entry && entry.open_mode) || "file", (entry && entry.playlist_type) || "mixed");
+    if (mode === "partymode") {
+      return;
+    }
+
     const commands = [];
     const repeatMode = (entry && entry.repeat_mode) || "off";
     const shuffleEnabled = this._toBool(entry && entry.shuffle);
@@ -989,6 +994,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           const openMode = this._normalizeOpenMode(item.open_mode || this._config.open_mode || "file", playlistType);
           const showFile = openMode === "file";
           const showDirectory = openMode === "directory";
+          const showRepeatShuffle = openMode !== "partymode";
           return `
             <div class="playlist-item" data-index="${index}">
               <div class="row-head">
@@ -1041,7 +1047,9 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
                   : ""
               }
 
-              <label>Repeat</label>
+              ${
+                showRepeatShuffle
+                  ? `<label>Repeat</label>
               <select data-field="repeat_mode" data-index="${index}">
                 ${this._getRepeatModeOptions(item.repeat_mode || "off")}
               </select>
@@ -1049,7 +1057,9 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
               <label>Shuffle</label>
               <select data-field="shuffle" data-index="${index}">
                 ${this._getBooleanOptions(this._toBool(item.shuffle))}
-              </select>
+              </select>`
+                  : ""
+              }
             </div>
           `;
         }.bind(this)
