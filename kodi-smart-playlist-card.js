@@ -8,7 +8,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       type: "custom:kodi-smart-playlist-card",
       icon: "mdi:playlist-play",
       method: "Player.Open",
-      open_mode: "partymode",
+      open_mode: "file",
       window: "videolibrary",
       debug: false,
       entity: "",
@@ -37,7 +37,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
     this._config = {
       icon: "mdi:playlist-play",
       method: "Player.Open",
-      open_mode: "partymode",
+      open_mode: "file",
       window: "videolibrary",
       debug: false,
       ...sanitizedConfig,
@@ -83,18 +83,35 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
     if (Array.isArray(this._config.playlists) && this._config.playlists.length > 0) {
       return this._config.playlists
-        .filter(function (item) {
-          return item && item.playlist;
-        })
+        .filter(
+          function (item) {
+            if (!item) {
+              return false;
+            }
+            const playlistType = item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist) || "mixed";
+            const openMode = this._normalizeOpenMode(item.open_mode || this._config.open_mode || "file", playlistType);
+            if (openMode === "directory") {
+              return true;
+            }
+            if (openMode === "partymode") {
+              return playlistType === "music" || playlistType === "video";
+            }
+            return !!item.playlist;
+          }.bind(this)
+        )
         .map(
           function (item) {
+            const playlistType = item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist) || "mixed";
+            const openMode = this._normalizeOpenMode(item.open_mode || this._config.open_mode || "file", playlistType);
+            const playlistPath = this._resolvePlaylistPath(item.playlist, playlistType);
             return {
-              name: item.name || item.playlist,
-              playlist: this._resolvePlaylistPath(item.playlist, item.playlist_type),
-              playlist_type: item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist) || "mixed",
+              name: item.name || this._extractPlaylistName(item.playlist) || playlistType,
+              playlist: playlistPath,
+              directory: item.directory || this._getPlaylistBasePath(playlistType),
+              playlist_type: playlistType,
               icon: item.icon || this._config.icon,
               method: item.method || this._config.method || "Player.Open",
-              open_mode: item.open_mode || "partymode",
+              open_mode: openMode,
               window: item.window || "videolibrary",
               params: item.params,
               repeat_mode: item.repeat_mode || "off",
@@ -104,14 +121,17 @@ class KodiSmartPlaylistCard extends HTMLElement {
         );
     }
 
+    const fallbackType =
+      this._config.playlist_type || this._guessPlaylistTypeFromPath(this._config.playlist) || "mixed";
     return [
       {
         name: this._config.name,
-        playlist: this._resolvePlaylistPath(this._config.playlist, this._config.playlist_type),
-        playlist_type: this._config.playlist_type || this._guessPlaylistTypeFromPath(this._config.playlist) || "mixed",
+        playlist: this._resolvePlaylistPath(this._config.playlist, fallbackType),
+        directory: this._config.directory || this._getPlaylistBasePath(fallbackType),
+        playlist_type: fallbackType,
         icon: this._config.icon,
         method: this._config.method || "Player.Open",
-        open_mode: "partymode",
+        open_mode: this._normalizeOpenMode(this._config.open_mode || "file", fallbackType),
         window: "videolibrary",
         params: this._config.params,
         repeat_mode: this._config.repeat_mode || "off",
@@ -397,51 +417,23 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
     try {
       const method = entry.method || "Player.Open";
-      const openMode = entry.open_mode || "partymode";
+      const openMode = this._normalizeOpenMode(entry.open_mode || "file", entry.playlist_type);
       serviceData = {
         entity_id: config.entity,
-        method: method,
+        method: "Player.Open",
       };
 
       // Home Assistant kodi.call_method expects method parameters as top-level fields.
       if (entry.params && typeof entry.params === "object" && !Array.isArray(entry.params)) {
         Object.assign(serviceData, entry.params);
-      } else if (openMode === "gui_activate_window") {
-        serviceData.method = "GUI.ActivateWindow";
-        serviceData.window = entry.window || this._getWindowForPlaylistType(entry.playlist_type);
-        serviceData.parameters = [entry.playlist];
-      } else if (method === "GUI.ActivateWindow") {
-        serviceData.window = entry.window || this._getWindowForPlaylistType(entry.playlist_type);
-        serviceData.parameters = [entry.playlist];
+      } else if (openMode === "directory") {
+        serviceData.item = { directory: entry.directory || this._getPlaylistBasePath(entry.playlist_type) };
+      } else if (openMode === "partymode") {
+        serviceData.item = { partymode: this._getPartyModeTarget(entry.playlist_type) };
       } else if (method === "Player.Open") {
-        if (openMode === "xbmc_builtin_party") {
-          const commands = [
-            "PlayMedia(" + entry.playlist + ")",
-            "PlayerControl(RepeatAll)",
-            "PlayerControl(RandomOn)",
-          ];
-          const responses = [];
-          for (let i = 0; i < commands.length; i += 1) {
-            const builtInServiceData = {
-              entity_id: config.entity,
-              method: "XBMC.ExecuteBuiltin",
-              command: commands[i],
-            };
-            const stepResponse = await this._hass.callService("kodi", "call_method", builtInServiceData);
-            responses.push({ command: commands[i], response: stepResponse });
-          }
-          if (config.debug) {
-            this._pushDebug(
-              this._formatDebug("success", { mode: "xbmc_builtin_party", commands: commands }, responses)
-            );
-          }
-          this._showToast("Playlist gestartet (XBMC Builtin): " + entry.name);
-          this._render();
-          return;
-        }
-        serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
+        serviceData.item = { file: entry.playlist };
       } else {
-        serviceData.item = openMode === "file" ? { file: entry.playlist } : { partymode: entry.playlist };
+        serviceData.item = { file: entry.playlist };
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
@@ -677,6 +669,30 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return value === true || value === "true";
   }
 
+  _normalizeOpenMode(openMode, playlistType) {
+    const mode = String(openMode || "file");
+    if (mode === "directory") {
+      return "directory";
+    }
+    if (mode === "partymode" && (playlistType === "music" || playlistType === "video")) {
+      return "partymode";
+    }
+    return "file";
+  }
+
+  _getPartyModeTarget(playlistType) {
+    return playlistType === "music" ? "music" : "video";
+  }
+
+  _extractPlaylistName(playlistPath) {
+    const value = String(playlistPath || "").trim();
+    if (!value) {
+      return "";
+    }
+    const lastSlash = value.lastIndexOf("/");
+    return lastSlash >= 0 ? value.slice(lastSlash + 1) : value;
+  }
+
   _getCandidatePlayerIds(entry) {
     const type = (entry && entry.playlist_type) || "mixed";
     if (type === "music") {
@@ -742,7 +758,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       type: "custom:kodi-smart-playlist-card",
       icon: "mdi:playlist-play",
       method: "Player.Open",
-      open_mode: "partymode",
+      open_mode: "file",
       window: "videolibrary",
       debug: false,
       entity: "",
@@ -755,9 +771,11 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           {
             name: "Playlist",
             icon: this._config.icon || "mdi:playlist-play",
-            open_mode: this._config.open_mode || "partymode",
+            open_mode: this._normalizeOpenMode(this._config.open_mode || "file", this._config.playlist_type || "mixed"),
             playlist_type: this._guessPlaylistTypeFromPath(this._config.playlist),
             playlist: this._extractPlaylistName(this._config.playlist) || "playlist.xsp",
+            directory:
+              this._getPlaylistBasePath(this._guessPlaylistTypeFromPath(this._config.playlist) || "mixed"),
             repeat_mode: "off",
             shuffle: false,
           },
@@ -767,9 +785,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
           {
             name: "Neue Playlist",
             icon: this._config.icon || "mdi:playlist-play",
-            open_mode: this._config.open_mode || "partymode",
+            open_mode: "file",
             playlist_type: "mixed",
             playlist: "playlist.xsp",
+            directory: this._getPlaylistBasePath("mixed"),
             repeat_mode: "off",
             shuffle: false,
           },
@@ -778,9 +797,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     }
     this._config.playlists = (this._config.playlists || []).map((item) => ({
       ...item,
-      open_mode: item.open_mode || this._config.open_mode || "partymode",
       playlist_type: item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist),
       playlist: this._extractPlaylistName(item.playlist) || "playlist.xsp",
+      directory: item.directory || this._getPlaylistBasePath(item.playlist_type || "mixed"),
+      open_mode: this._normalizeOpenMode(item.open_mode || this._config.open_mode || "file", item.playlist_type),
       repeat_mode: item.repeat_mode || "off",
       shuffle: this._toBool(item.shuffle),
     }));
@@ -819,9 +839,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     if (Array.isArray(normalized.playlists) && normalized.playlists.length > 0) {
       normalized.playlists = normalized.playlists.map((item) => ({
         ...item,
-        open_mode: item.open_mode || normalized.open_mode || "partymode",
         playlist_type: item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist),
         playlist: this._extractPlaylistName(item.playlist) || "playlist.xsp",
+        directory: item.directory || this._getPlaylistBasePath(item.playlist_type || "mixed"),
+        open_mode: this._normalizeOpenMode(item.open_mode || normalized.open_mode || "file", item.playlist_type),
         repeat_mode: item.repeat_mode || "off",
         shuffle: this._toBool(item.shuffle),
       }));
@@ -854,6 +875,12 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
 
     if (field === "shuffle") {
       playlists[index][field] = value === "true";
+    } else if (field === "playlist_type") {
+      playlists[index][field] = value;
+      playlists[index].directory = this._getPlaylistBasePath(value);
+      playlists[index].open_mode = this._normalizeOpenMode(playlists[index].open_mode || "file", value);
+    } else if (field === "open_mode") {
+      playlists[index][field] = this._normalizeOpenMode(value, playlists[index].playlist_type || "mixed");
     } else {
       playlists[index][field] = value;
     }
@@ -873,9 +900,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       {
         name: "Neue Playlist",
         icon: this._config.icon || "mdi:playlist-play",
-        open_mode: this._config.open_mode || "partymode",
+        open_mode: this._normalizeOpenMode(this._config.open_mode || "file", "mixed"),
         playlist_type: "mixed",
         playlist: "playlist.xsp",
+        directory: this._getPlaylistBasePath("mixed"),
         repeat_mode: "off",
         shuffle: false,
       },
@@ -900,9 +928,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       playlists.push({
         name: "Neue Playlist",
         icon: this._config.icon || "mdi:playlist-play",
-        open_mode: this._config.open_mode || "partymode",
+        open_mode: this._normalizeOpenMode(this._config.open_mode || "file", "mixed"),
         playlist_type: "mixed",
         playlist: "playlist.xsp",
+        directory: this._getPlaylistBasePath("mixed"),
         repeat_mode: "off",
         shuffle: false,
       });
@@ -956,6 +985,10 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     const playlistRows = playlists
       .map(
         function (item, index) {
+          const playlistType = item.playlist_type || "mixed";
+          const openMode = this._normalizeOpenMode(item.open_mode || this._config.open_mode || "file", playlistType);
+          const showFile = openMode === "file";
+          const showDirectory = openMode === "directory";
           return `
             <div class="playlist-item" data-index="${index}">
               <div class="row-head">
@@ -979,17 +1012,34 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
 
               <label>Open Mode</label>
               <select data-field="open_mode" data-index="${index}">
-                ${this._getOpenModeOptions(item.open_mode || this._config.open_mode || "partymode")}
+                ${this._getOpenModeOptions(openMode, playlistType)}
               </select>
 
-              <label>Playlist-Datei (.xsp)</label>
+              ${
+                showFile
+                  ? `<label>Playlist-Datei (.xsp)</label>
               <input
                 data-field="playlist"
                 data-index="${index}"
                 type="text"
                 placeholder="playlist.xsp"
                 value="${this._escapeAttr(item.playlist || "playlist.xsp")}"
-              />
+              />`
+                  : ""
+              }
+
+              ${
+                showDirectory
+                  ? `<label>Directory-Pfad</label>
+              <input
+                data-field="directory"
+                data-index="${index}"
+                type="text"
+                placeholder="${this._escapeAttr(this._getPlaylistBasePath(playlistType))}"
+                value="${this._escapeAttr(item.directory || this._getPlaylistBasePath(playlistType))}"
+              />`
+                  : ""
+              }
 
               <label>Repeat</label>
               <select data-field="repeat_mode" data-index="${index}">
@@ -1235,21 +1285,22 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     }
   }
 
-  _getOpenModeOptions(selectedMode) {
-    const modes = ["partymode", "file", "gui_activate_window", "xbmc_builtin_party"];
+  _getOpenModeOptions(selectedMode, playlistType) {
+    const modes = ["file", "directory"];
+    if (playlistType === "music" || playlistType === "video") {
+      modes.push("partymode");
+    }
     const options = modes.indexOf(selectedMode) === -1 ? [selectedMode].concat(modes) : modes;
     return options
       .map(
         function (mode) {
           const selected = mode === selectedMode ? "selected" : "";
           const label =
-            mode === "file"
-              ? "file (komplette Playlist)"
-              : mode === "gui_activate_window"
-                ? "GUI.ActivateWindow (Fenster + Parameter)"
-              : mode === "xbmc_builtin_party"
-                ? "xbmc_builtin_party (PlayMedia + Repeat + Random)"
-                : "partymode (dynamisch)";
+            mode === "directory"
+              ? "Ordner (directory)"
+              : mode === "partymode"
+                ? "Partymode"
+                : "Datei (file)";
           return `<option value="${this._escapeAttr(mode)}" ${selected}>${this._escape(label)}</option>`;
         }.bind(this)
       )
@@ -1278,6 +1329,27 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     }
     const lastSlash = value.lastIndexOf("/");
     return lastSlash >= 0 ? value.slice(lastSlash + 1) : value;
+  }
+
+  _getPlaylistBasePath(playlistType) {
+    if (playlistType === "music") {
+      return "special://profile/playlists/music/";
+    }
+    if (playlistType === "video") {
+      return "special://profile/playlists/video/";
+    }
+    return "special://profile/playlists/mixed/";
+  }
+
+  _normalizeOpenMode(openMode, playlistType) {
+    const mode = String(openMode || "file");
+    if (mode === "directory") {
+      return "directory";
+    }
+    if (mode === "partymode" && (playlistType === "music" || playlistType === "video")) {
+      return "partymode";
+    }
+    return "file";
   }
 
   _getKodiEntities() {
