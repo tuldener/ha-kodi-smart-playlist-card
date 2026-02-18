@@ -695,6 +695,24 @@ class KodiSmartPlaylistCard extends HTMLElement {
     return value === true || value === "true";
   }
 
+  _toOptionalBool(value) {
+    if (value === true || value === "true") {
+      return true;
+    }
+    if (value === false || value === "false") {
+      return false;
+    }
+    return null;
+  }
+
+  _toNumberOrNull(value) {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
   _normalizeOpenMode(openMode, playlistType) {
     const mode = String(openMode || "file");
     if (mode === "directory") {
