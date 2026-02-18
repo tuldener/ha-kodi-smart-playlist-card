@@ -493,32 +493,55 @@ class KodiSmartPlaylistCard extends HTMLElement {
   }
 
   async _applyPostPlayCommands(entityId, entry) {
-    const playerId = 1;
     const commands = [];
     const repeatMode = (entry && entry.repeat_mode) || "off";
     const shuffleEnabled = this._toBool(entry && entry.shuffle);
+    const playerIds = this._getCandidatePlayerIds(entry);
 
-    if (repeatMode === "all" || repeatMode === "one") {
-      commands.push({ method: "Player.SetRepeat", payload: { playerid: playerId, repeat: repeatMode } });
+    if (repeatMode === "all" || repeatMode === "one" || repeatMode === "off") {
+      commands.push({ method: "Player.SetRepeat", key: "repeat", value: repeatMode });
     }
-    commands.push({ method: "Player.SetShuffle", payload: { playerid: playerId, shuffle: shuffleEnabled } });
+    commands.push({ method: "Player.SetShuffle", key: "shuffle", value: shuffleEnabled });
+
+    // Wait briefly after Player.Open so Kodi has an active player to target.
+    await this._sleep(700);
 
     for (let i = 0; i < commands.length; i += 1) {
       const command = commands[i];
-      const request = {
-        entity_id: entityId,
-        method: command.method,
-        ...command.payload,
-      };
-      try {
-        const response = await this._hass.callService("kodi", "call_method", request);
-        if (this._config && this._config.debug) {
-          this._pushDebug(this._formatDebug("success", request, response));
+      let applied = false;
+      let lastError = null;
+      for (let attempt = 0; attempt < 3 && !applied; attempt += 1) {
+        for (let p = 0; p < playerIds.length; p += 1) {
+          const request = {
+            entity_id: entityId,
+            method: command.method,
+            playerid: playerIds[p],
+            [command.key]: command.value,
+          };
+          try {
+            const response = await this._hass.callService("kodi", "call_method", request);
+            if (this._config && this._config.debug) {
+              this._pushDebug(this._formatDebug("success", request, response));
+            }
+            applied = true;
+            break;
+          } catch (err) {
+            lastError = err;
+          }
         }
-      } catch (err) {
-        if (this._config && this._config.debug) {
-          this._pushDebug(this._formatDebug("error", request, null, err));
+        if (!applied) {
+          await this._sleep(450);
         }
+      }
+
+      if (!applied && this._config && this._config.debug) {
+        const failedRequest = {
+          entity_id: entityId,
+          method: command.method,
+          playerid: playerIds.join(","),
+          [command.key]: command.value,
+        };
+        this._pushDebug(this._formatDebug("error", failedRequest, null, lastError || "No active player found"));
       }
     }
   }
@@ -652,6 +675,20 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
   _toBool(value) {
     return value === true || value === "true";
+  }
+
+  _getCandidatePlayerIds(entry) {
+    const type = (entry && entry.playlist_type) || "mixed";
+    if (type === "music") {
+      return [0, 1];
+    }
+    return [1, 0];
+  }
+
+  _sleep(ms) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
   }
 
   _formatDebug(status, requestPayload, responsePayload, err) {
