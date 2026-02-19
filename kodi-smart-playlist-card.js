@@ -489,7 +489,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
-      await this._applyPostPlayCommands(config.entity, entry);
       if (config.debug) {
         this._pushDebug(this._formatDebug("success", serviceData, response));
       }
@@ -808,10 +807,16 @@ class KodiSmartPlaylistCard extends HTMLElement {
       return null;
     }
     const options = {};
+    const openMode = this._normalizeOpenMode(entry.open_mode || "file", entry.playlist_type || "mixed");
 
     const optionsRepeat = String(entry.options_repeat || "").trim();
     if (optionsRepeat) {
       options.repeat = optionsRepeat;
+    } else if (openMode !== "partymode") {
+      const repeatMode = String(entry.repeat_mode || "off").trim();
+      if (repeatMode === "off" || repeatMode === "one" || repeatMode === "all") {
+        options.repeat = repeatMode;
+      }
     }
 
     const resumeMode = String(entry.options_resume_mode || "").trim();
@@ -834,6 +839,8 @@ class KodiSmartPlaylistCard extends HTMLElement {
     const shuffled = this._toOptionalBool(entry.options_shuffled);
     if (shuffled !== null) {
       options.shuffled = shuffled;
+    } else if (openMode !== "partymode") {
+      options.shuffled = this._toBool(entry.shuffle);
     }
 
     return Object.keys(options).length > 0 ? options : null;
