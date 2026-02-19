@@ -958,7 +958,8 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
             icon: this._config.icon || "mdi:playlist-play",
             open_mode: this._normalizeOpenMode(this._config.open_mode || "file", this._config.playlist_type || "mixed"),
             playlist_type: this._guessPlaylistTypeFromPath(this._config.playlist),
-            playlist: this._extractPlaylistName(this._config.playlist) || "playlist.xsp",
+            playlist:
+              this._config.playlist || this._getPlaylistBasePath(this._guessPlaylistTypeFromPath(this._config.playlist)),
             directory:
               this._getPlaylistBasePath(this._guessPlaylistTypeFromPath(this._config.playlist) || "mixed"),
             repeat_mode: "off",
@@ -972,7 +973,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
             icon: this._config.icon || "mdi:playlist-play",
             open_mode: "file",
             playlist_type: "mixed",
-            playlist: "playlist.xsp",
+            playlist: this._getPlaylistBasePath("mixed"),
             directory: this._getPlaylistBasePath("mixed"),
             repeat_mode: "off",
             shuffle: false,
@@ -983,7 +984,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
     this._config.playlists = (this._config.playlists || []).map((item) => ({
       ...item,
       playlist_type: item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist),
-      playlist: this._extractPlaylistName(item.playlist) || "playlist.xsp",
+      playlist: item.playlist || this._getPlaylistBasePath(item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist)),
       directory: item.directory || this._getPlaylistBasePath(item.playlist_type || "mixed"),
       open_mode: this._normalizeOpenMode(item.open_mode || this._config.open_mode || "file", item.playlist_type),
       partymode_playlist: item.partymode_playlist || "",
@@ -1026,7 +1027,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
       normalized.playlists = normalized.playlists.map((item) => ({
         ...item,
         playlist_type: item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist),
-        playlist: this._extractPlaylistName(item.playlist) || "playlist.xsp",
+        playlist: item.playlist || this._getPlaylistBasePath(item.playlist_type || this._guessPlaylistTypeFromPath(item.playlist)),
         directory: item.directory || this._getPlaylistBasePath(item.playlist_type || "mixed"),
         open_mode: this._normalizeOpenMode(item.open_mode || normalized.open_mode || "file", item.playlist_type),
         partymode_playlist: item.partymode_playlist || "",
@@ -1089,7 +1090,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         icon: this._config.icon || "mdi:playlist-play",
         open_mode: this._normalizeOpenMode(this._config.open_mode || "file", "mixed"),
         playlist_type: "mixed",
-        playlist: "playlist.xsp",
+        playlist: this._getPlaylistBasePath("mixed"),
         directory: this._getPlaylistBasePath("mixed"),
         repeat_mode: "off",
         shuffle: false,
@@ -1117,7 +1118,7 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
         icon: this._config.icon || "mdi:playlist-play",
         open_mode: this._normalizeOpenMode(this._config.open_mode || "file", "mixed"),
         playlist_type: "mixed",
-        playlist: "playlist.xsp",
+        playlist: this._getPlaylistBasePath("mixed"),
         directory: this._getPlaylistBasePath("mixed"),
         repeat_mode: "off",
         shuffle: false,
@@ -1214,8 +1215,8 @@ class KodiSmartPlaylistCardEditor extends HTMLElement {
                 data-field="playlist"
                 data-index="${index}"
                 type="text"
-                placeholder="playlist.xsp"
-                value="${this._escapeAttr(item.playlist || "playlist.xsp")}"
+                placeholder="${this._escapeAttr(this._getPlaylistBasePath(playlistType))}"
+                value="${this._escapeAttr(item.playlist || this._getPlaylistBasePath(playlistType))}"
               />`
                   : ""
               }
