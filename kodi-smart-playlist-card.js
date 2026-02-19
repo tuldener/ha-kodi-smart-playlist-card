@@ -62,6 +62,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
   connectedCallback() {
     this._ensureRefreshTimer();
+    this._refreshEntityState();
     this._render();
   }
 
@@ -76,12 +77,26 @@ class KodiSmartPlaylistCard extends HTMLElement {
     if (this._refreshTimer) {
       return;
     }
-    this._refreshTimer = setInterval(() => {
+    this._refreshTimer = setInterval(async () => {
       if (!this.isConnected) {
         return;
       }
+      await this._refreshEntityState();
       this._render();
     }, 30000);
+  }
+
+  async _refreshEntityState() {
+    if (!this._hass || !this._config || !this._config.entity) {
+      return;
+    }
+    try {
+      await this._hass.callService("homeassistant", "update_entity", {
+        entity_id: this._config.entity,
+      });
+    } catch (_err) {
+      // Ignore refresh errors; regular hass updates still render the card.
+    }
   }
 
   getCardSize() {
