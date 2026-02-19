@@ -487,6 +487,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       if (builtOptions) {
         serviceData.options = builtOptions;
       }
+      this._stripInlineRepeatShuffleOptions(serviceData);
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
       await this._applyPostPlayCommands(config.entity, entry);
@@ -824,6 +825,17 @@ class KodiSmartPlaylistCard extends HTMLElement {
     }
 
     return Object.keys(options).length > 0 ? options : null;
+  }
+
+  _stripInlineRepeatShuffleOptions(serviceData) {
+    if (!serviceData || !serviceData.options || typeof serviceData.options !== "object") {
+      return;
+    }
+    delete serviceData.options.repeat;
+    delete serviceData.options.shuffled;
+    if (Object.keys(serviceData.options).length === 0) {
+      delete serviceData.options;
+    }
   }
 
   _parseResumeTime(value) {
