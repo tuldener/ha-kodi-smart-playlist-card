@@ -62,6 +62,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
 
   connectedCallback() {
     this._ensureRefreshTimer();
+    this._render();
   }
 
   disconnectedCallback() {
@@ -80,7 +81,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
         return;
       }
       this._render();
-    }, 5000);
+    }, 30000);
   }
 
   getCardSize() {
