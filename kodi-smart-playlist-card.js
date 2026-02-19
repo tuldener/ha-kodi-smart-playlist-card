@@ -50,18 +50,18 @@ class KodiSmartPlaylistCard extends HTMLElement {
       this.attachShadow({ mode: "open" });
     }
 
+    this._ensureRefreshTimer();
     this._render();
   }
 
   set hass(hass) {
     this._hass = hass;
+    this._ensureRefreshTimer();
     this._render();
   }
 
   connectedCallback() {
-    if (!this._refreshTimer) {
-      this._refreshTimer = setInterval(() => this._render(), 10000);
-    }
+    this._ensureRefreshTimer();
   }
 
   disconnectedCallback() {
@@ -69,6 +69,18 @@ class KodiSmartPlaylistCard extends HTMLElement {
       clearInterval(this._refreshTimer);
       this._refreshTimer = null;
     }
+  }
+
+  _ensureRefreshTimer() {
+    if (this._refreshTimer) {
+      return;
+    }
+    this._refreshTimer = setInterval(() => {
+      if (!this.isConnected) {
+        return;
+      }
+      this._render();
+    }, 5000);
   }
 
   getCardSize() {
