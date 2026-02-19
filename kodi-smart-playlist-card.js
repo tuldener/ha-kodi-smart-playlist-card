@@ -812,7 +812,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
     const optionsRepeat = String(entry.options_repeat || "").trim();
     if (optionsRepeat) {
       options.repeat = optionsRepeat;
-    } else if (openMode !== "partymode") {
+    } else {
       const repeatMode = String(entry.repeat_mode || "off").trim();
       if (repeatMode === "off" || repeatMode === "one" || repeatMode === "all") {
         options.repeat = repeatMode;
@@ -839,7 +839,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
     const shuffled = this._toOptionalBool(entry.options_shuffled);
     if (shuffled !== null) {
       options.shuffled = shuffled;
-    } else if (openMode !== "partymode") {
+    } else {
       options.shuffled = this._toBool(entry.shuffle);
     }
 
