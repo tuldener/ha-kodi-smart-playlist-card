@@ -489,6 +489,7 @@ class KodiSmartPlaylistCard extends HTMLElement {
       }
 
       const response = await this._hass.callService("kodi", "call_method", serviceData);
+      await this._applyPostPlayCommands(config.entity, entry);
       if (config.debug) {
         this._pushDebug(this._formatDebug("success", serviceData, response));
       }
@@ -536,14 +537,11 @@ class KodiSmartPlaylistCard extends HTMLElement {
   }
 
   async _applyPostPlayCommands(entityId, entry) {
-    const mode = this._normalizeOpenMode((entry && entry.open_mode) || "file", (entry && entry.playlist_type) || "mixed");
-    if (mode === "partymode") {
-      return;
-    }
-
     const commands = [];
-    const repeatMode = (entry && entry.repeat_mode) || "off";
-    const shuffleEnabled = this._toBool(entry && entry.shuffle);
+    const explicitRepeat = String((entry && entry.options_repeat) || "").trim();
+    const repeatMode = explicitRepeat || String((entry && entry.repeat_mode) || "off").trim();
+    const explicitShuffled = this._toOptionalBool(entry && entry.options_shuffled);
+    const shuffleEnabled = explicitShuffled !== null ? explicitShuffled : this._toBool(entry && entry.shuffle);
     const playerIds = this._getCandidatePlayerIds(entry);
 
     if (repeatMode === "all" || repeatMode === "one" || repeatMode === "off") {
@@ -807,17 +805,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       return null;
     }
     const options = {};
-    const openMode = this._normalizeOpenMode(entry.open_mode || "file", entry.playlist_type || "mixed");
-
-    const optionsRepeat = String(entry.options_repeat || "").trim();
-    if (optionsRepeat) {
-      options.repeat = optionsRepeat;
-    } else {
-      const repeatMode = String(entry.repeat_mode || "off").trim();
-      if (repeatMode === "off" || repeatMode === "one" || repeatMode === "all") {
-        options.repeat = repeatMode;
-      }
-    }
 
     const resumeMode = String(entry.options_resume_mode || "").trim();
     if (resumeMode === "true") {
@@ -834,13 +821,6 @@ class KodiSmartPlaylistCard extends HTMLElement {
       if (t) {
         options.resume = t;
       }
-    }
-
-    const shuffled = this._toOptionalBool(entry.options_shuffled);
-    if (shuffled !== null) {
-      options.shuffled = shuffled;
-    } else {
-      options.shuffled = this._toBool(entry.shuffle);
     }
 
     return Object.keys(options).length > 0 ? options : null;
